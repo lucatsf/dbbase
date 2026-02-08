@@ -44,6 +44,9 @@ export function activate(context: vscode.ExtensionContext) {
         activeConnection = conn;
         updateStatusBar();
 
+        // Testa a conexão em background para atualizar o status na Sidebar
+        connectionsProvider.testConnection(conn);
+
         // Salva conexão ativa para o servidor MCP
         const configDir = context.globalStorageUri.fsPath;
         const configPath = path.join(configDir, 'active_connection.json');
@@ -151,6 +154,7 @@ export function activate(context: vscode.ExtensionContext) {
     context.subscriptions.push(vscode.commands.registerCommand('dbbase.addConnection', () => connectionsProvider.addConnection()));
     context.subscriptions.push(vscode.commands.registerCommand('dbbase.editConnection', (node) => connectionsProvider.editConnection(node)));
     context.subscriptions.push(vscode.commands.registerCommand('dbbase.deleteConnection', (node) => connectionsProvider.deleteConnection(node)));
+    context.subscriptions.push(vscode.commands.registerCommand('dbbase.refreshConnections', () => connectionsProvider.refresh()));
 
     // Configuração Automática do MCP para Claude Desktop
     context.subscriptions.push(vscode.commands.registerCommand('dbbase.setupMCP', async () => {
