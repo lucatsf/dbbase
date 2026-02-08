@@ -1,7 +1,7 @@
 {
   "name": "dbbase",
   "displayName": "DBbase",
-  "description": "Uma ferramenta poderosa e intuitiva para gerenciar seus bancos de dados",
+  "description": "A powerful and intuitive tool to manage your databases. Connect to multiple databases, run queries, and explore your data with ease. DBbase is designed to enhance your productivity and streamline your database management tasks.",
   "publisher": "DBbase",
   "icon": "resources/icon.png",
   "version": "0.0.1",
