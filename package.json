@@ -1,15 +1,17 @@
 {
   "name": "dbbase",
-  "displayName": "DBbase",
-  "description": "A powerful and intuitive tool to manage your databases. Connect to multiple databases, run queries, and explore your data with ease. DBbase is designed to enhance your productivity and streamline your database management tasks.",
-  "publisher": "DBbase",
+  "displayName": "DBBase - Professional Database Manager & MCP",
+  "description": "Professional SQL client with DBeaver/DataGrip fluidity. High-performance grid, native MCP for AI context (Copilot/Claude), and advanced exports for Postgres & MySQL.",
+  "publisher": "dbbase-team",
   "icon": "resources/icon.png",
-  "version": "0.0.1",
+  "version": "1.0.0",
   "engines": {
     "vscode": "^1.109.0"
   },
   "categories": [
-    "Programming Languages"
+    "Programming Languages",
+    "Data Science",
+    "Other"
   ],
   "activationEvents": [
     "onLanguage:sql"
