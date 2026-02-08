@@ -1,0 +1,121 @@
+{
+  "name": "dbbase",
+  "displayName": "dbbase",
+  "description": "Executar queries SQL (Postgres/MySQL) diretamente no VS Code",
+  "version": "0.0.1",
+  "engines": {
+    "vscode": "^1.109.0"
+  },
+  "categories": [
+    "Other"
+  ],
+  "activationEvents": [
+    "onLanguage:sql"
+  ],
+  "main": "./dist/extension.js",
+  "contributes": {
+    "viewsContainers": {
+      "activitybar": [
+        {
+          "id": "dbbase-explorer",
+          "title": "DBBase",
+          "icon": "$(database)"
+        }
+      ]
+    },
+    "views": {
+      "dbbase-explorer": [
+        {
+          "id": "dbbase-connections",
+          "name": "Conexões"
+        }
+      ]
+    },
+    "commands": [
+      {
+        "command": "dbbase.openQueryEditor",
+        "title": "DBBase: Nova Aba de Query",
+        "icon": "$(add)"
+      },
+      {
+        "command": "dbbase.addConnection",
+        "title": "Adicionar Conexão",
+        "icon": "$(plus)"
+      },
+      {
+        "command": "dbbase.deleteConnection",
+        "title": "Excluir Conexão",
+        "icon": "$(trash)"
+      },
+      {
+        "command": "dbbase.editConnection",
+        "title": "Editar Conexão",
+        "icon": "$(edit)"
+      },
+      {
+        "command": "dbbase.runQuery",
+        "title": "DBBase: Executar Query"
+      }
+    ],
+    "menus": {
+      "view/title": [
+        {
+          "command": "dbbase.addConnection",
+          "when": "view == dbbase-connections",
+          "group": "navigation"
+        }
+      ],
+      "view/item/context": [
+        {
+          "command": "dbbase.editConnection",
+          "when": "view == dbbase-connections && viewItem == connection",
+          "group": "inline"
+        },
+        {
+          "command": "dbbase.deleteConnection",
+          "when": "view == dbbase-connections && viewItem == connection",
+          "group": "inline"
+        }
+      ]
+    },
+    "keybindings": [
+      {
+        "command": "dbbase.runQuery",
+        "key": "ctrl+enter",
+        "mac": "cmd+enter",
+        "when": "editorTextFocus"
+      }
+    ]
+  },
+  "scripts": {
+    "vscode:prepublish": "npm run package",
+    "compile": "npm run check-types && npm run lint && node esbuild.js",
+    "watch": "npm-run-all -p watch:*",
+    "watch:esbuild": "node esbuild.js --watch",
+    "watch:tsc": "tsc --noEmit --watch --project tsconfig.json",
+    "package": "npm run check-types && npm run lint && node esbuild.js --production",
+    "compile-tests": "tsc -p . --outDir out",
+    "watch-tests": "tsc -p . -w --outDir out",
+    "pretest": "npm run compile-tests && npm run compile && npm run lint",
+    "check-types": "tsc --noEmit",
+    "lint": "eslint src",
+    "test": "vscode-test"
+  },
+  "devDependencies": {
+    "@types/mocha": "^10.0.10",
+    "@types/node": "^22.19.9",
+    "@types/pg": "^8.16.0",
+    "@types/vscode": "^1.109.0",
+    "@vscode/test-cli": "^0.0.12",
+    "@vscode/test-electron": "^2.5.2",
+    "esbuild": "^0.27.2",
+    "eslint": "^9.39.2",
+    "npm-run-all": "^4.1.5",
+    "typescript": "^5.9.3",
+    "typescript-eslint": "^8.54.0"
+  },
+  "dependencies": {
+    "mysql2": "^3.16.3",
+    "pg": "^8.18.0"
+  }
+}
