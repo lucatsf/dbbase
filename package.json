@@ -1,17 +1,34 @@
 {
   "name": "dbbase",
-  "displayName": "dbbase",
-  "description": "Executar queries SQL (Postgres/MySQL) diretamente no VS Code",
+  "displayName": "DBbase",
+  "description": "Uma ferramenta poderosa e intuitiva para gerenciar seus bancos de dados",
+  "publisher": "DBbase",
+  "icon": "resources/icon.png",
   "version": "0.0.1",
   "engines": {
     "vscode": "^1.109.0"
   },
   "categories": [
-    "Other"
+    "Programming Languages"
   ],
   "activationEvents": [
     "onLanguage:sql"
   ],
+  "license": "MIT",
+  "keywords": [
+    "sql",
+    "postgres",
+    "mysql",
+    "database",
+    "datagrip",
+    "mcp",
+    "query",
+    "dbbase"
+  ],
+  "author": {
+    "name": "Lucas Torres São Felicio",
+    "email": "lucastorresfellicio@gmail.com"
+  },
   "main": "./dist/extension.js",
   "contributes": {
     "viewsContainers": {
