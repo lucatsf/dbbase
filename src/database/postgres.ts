@@ -67,4 +67,54 @@ export class PostgresDriver extends BaseDriver {
         const result = await this.query(sql);
         return result.rows.map(r => r.name || r.table_name);
     }
+
+    async getSchema(): Promise<any[]> {
+        const sql = `
+            SELECT 
+                t.table_name, 
+                c.column_name, 
+                c.data_type,
+                pg_catalog.col_description(format('%s.%s', t.table_schema, t.table_name)::regclass::oid, c.ordinal_position) as description
+            FROM information_schema.tables t
+            JOIN information_schema.columns c ON t.table_name = c.table_name AND t.table_schema = c.table_schema
+            WHERE t.table_schema = 'public' 
+            AND t.table_type = 'BASE TABLE'
+            ORDER BY t.table_name, c.ordinal_position;
+        `;
+        const result = await this.query(sql);
+        return result.rows;
+    }
+
+    async getTableDetails(tableName: string): Promise<any> {
+        // Obter constraints e índices
+        const constraintsSql = `
+            SELECT 
+                conname as constraint_name,
+                pg_get_constraintdef(c.oid) as definition
+            FROM pg_constraint c
+            JOIN pg_namespace n ON n.oid = c.connamespace
+            WHERE n.nspname = 'public'
+            AND conrelid = '"${tableName}"'::regclass;
+        `;
+        
+        const indexesSql = `
+            SELECT 
+                indexname,
+                indexdef
+            FROM pg_indexes
+            WHERE schemaname = 'public'
+            AND tablename = '${tableName}';
+        `;
+
+        const [constraints, indexes] = await Promise.all([
+            this.query(constraintsSql),
+            this.query(indexesSql)
+        ]);
+
+        return {
+            tableName,
+            constraints: constraints.rows,
+            indexes: indexes.rows
+        };
+    }
 }

@@ -66,4 +66,35 @@ export class MySQLDriver extends BaseDriver {
         const result = await this.query(sql);
         return result.rows.map(r => r.name || r.TABLE_NAME || r.table_name);
     }
+
+    async getSchema(): Promise<any[]> {
+        const sql = `
+            SELECT 
+                TABLE_NAME as table_name, 
+                COLUMN_NAME as column_name, 
+                DATA_TYPE as data_type,
+                COLUMN_COMMENT as description
+            FROM information_schema.columns 
+            WHERE table_schema = DATABASE()
+            ORDER BY table_name, ordinal_position;
+        `;
+        const result = await this.query(sql);
+        return result.rows;
+    }
+
+    async getTableDetails(tableName: string): Promise<any> {
+        const indexesSql = `SHOW INDEX FROM \`${tableName}\`;`;
+        const createSql = `SHOW CREATE TABLE \`${tableName}\`;`;
+
+        const [indexes, createTable] = await Promise.all([
+            this.query(indexesSql),
+            this.query(createSql)
+        ]);
+
+        return {
+            tableName,
+            indexes: indexes.rows,
+            createTable: createTable.rows[0]
+        };
+    }
 }
