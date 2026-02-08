@@ -110,10 +110,20 @@ export function activate(context: vscode.ExtensionContext) {
             return;
         }
 
-        const sql = editor.document.getText(editor.selection.isEmpty ? undefined : editor.selection);
+        let sql = editor.document.getText(editor.selection.isEmpty ? undefined : editor.selection).trim();
         if (!sql) {
             return;
         }
+
+        // --- NOVA LÓGICA DE VALIDAÇÃO DE PONTO E VÍRGULA ---
+        // Padrão: Se a query começa com INSERT, UPDATE ou DELETE, ela PRECISA terminar com ;
+        const isDataChangeQuery = /^(INSERT|UPDATE|DELETE|CREATE|DROP|ALTER)/i.test(sql);
+        
+        if (isDataChangeQuery && !sql.endsWith(';')) {
+            vscode.window.showErrorMessage("⚠️ Query de alteração de dados precisa terminar com ';' por segurança.");
+            return;
+        }
+        // --------------------------------------------------
 
         lastExecutedSql = sql;
 
@@ -145,7 +155,18 @@ export function activate(context: vscode.ExtensionContext) {
                 try {
                     await client.connect();
                     const res = await client.query(sql);
-                    rows = res.rows;
+                    
+                    // Ajuste para queries que não retornam linhas (INSERT/UPDATE/DELETE)
+                    if (Array.isArray(res)) {
+                        // Caso de múltiplas queries
+                        rows = res[res.length - 1].rows || [];
+                    } else {
+                        rows = res.rows || [];
+                        // Se for uma query de alteração sem retorno, mostramos o count
+                        if ((res.command === 'UPDATE' || res.command === 'INSERT' || res.command === 'DELETE') && rows.length === 0) {
+                            rows = [{ status: "Success", command: res.command, rows_affected: res.rowCount }];
+                        }
+                    }
                 } finally {
                     await client.end().catch(() => {});
                 }
@@ -161,11 +182,24 @@ export function activate(context: vscode.ExtensionContext) {
                     password: password,
                     database: database,
                     port: port,
-                    connectTimeout: 5000
+                    connectTimeout: 5000,
+                    multipleStatements: true // Permite rodar múltiplas queries separadas por ;
                 });
                 try {
                     const [result] = await conn.execute(sql);
-                    rows = result as any[];
+                    
+                    if (Array.isArray(result)) {
+                        rows = result as any[];
+                    } else {
+                        // Caso de INSERT/UPDATE no MySQL (result não é array)
+                        const resObj = result as any;
+                        rows = [{ 
+                            status: "Success", 
+                            affectedRows: resObj.affectedRows, 
+                            insertId: resObj.insertId,
+                            warningStatus: resObj.warningStatus
+                        }];
+                    }
                 } finally {
                     await conn.end().catch(() => {});
                 }
