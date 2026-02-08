@@ -1,4 +1,7 @@
 import * as vscode from 'vscode';
+import * as fs from 'fs';
+import * as path from 'path';
+import * as XLSX from 'xlsx';
 import { getTableHtml } from '../utils/table-html';
 import { DriverFactory } from '../database';
 
@@ -33,8 +36,96 @@ export class ResultsViewProvider implements vscode.WebviewViewProvider {
                         vscode.commands.executeCommand('dbbase.executeQuery');
                     }
                     break;
+                case 'exportData':
+                    await this.handleExport(message.format, message.data);
+                    break;
             }
         });
+    }
+
+    private async handleExport(format: string, data: any[]) {
+        if (!data || data.length === 0) {
+            vscode.window.showWarningMessage('Não há dados para exportar.');
+            return;
+        }
+
+        const filters: { [name: string]: string[] } = {};
+        switch (format) {
+            case 'csv': filters['CSV Files'] = ['csv']; break;
+            case 'json': filters['JSON Files'] = ['json']; break;
+            case 'xlsx': filters['Excel Files'] = ['xlsx']; break;
+            case 'md': filters['Markdown Files'] = ['md']; break;
+            case 'sql': filters['SQL Files'] = ['sql']; break;
+        }
+
+        const uri = await vscode.window.showSaveDialog({
+            defaultUri: vscode.Uri.file(path.join(vscode.workspace.workspaceFolders?.[0].uri.fsPath || '', `export_${Date.now()}.${format}`)),
+            filters: filters
+        });
+
+        if (!uri) return;
+
+        try {
+            let content: string | Buffer = '';
+            const headers = Object.keys(data[0]);
+
+            switch (format) {
+                case 'json':
+                    content = JSON.stringify(data, null, 2);
+                    break;
+                case 'csv':
+                    const csvRows = [headers.join(',')];
+                    data.forEach(row => {
+                        const values = headers.map(h => {
+                            const val = row[h];
+                            return typeof val === 'string' ? `"${val.replace(/"/g, '""')}"` : val;
+                        });
+                        csvRows.push(values.join(','));
+                    });
+                    content = csvRows.join('\n');
+                    break;
+                case 'md':
+                    const mdRows = [`| ${headers.join(' | ')} |`, `| ${headers.map(() => '---').join(' | ')} |`];
+                    data.forEach(row => {
+                        mdRows.push(`| ${headers.map(h => row[h]).join(' | ')} |`);
+                    });
+                    content = mdRows.join('\n');
+                    break;
+                case 'sql':
+                    const tableName = this.getTableName(this._lastQuery || 'exported_table');
+                    const sqlRows = data.map(row => {
+                        const cols = headers.join(', ');
+                        const vals = headers.map(h => {
+                            const val = row[h];
+                            if (val === null) return 'NULL';
+                            return typeof val === 'string' ? `'${val.replace(/'/g, "''")}'` : val;
+                        }).join(', ');
+                        return `INSERT INTO ${tableName} (${cols}) VALUES (${vals});`;
+                    });
+                    content = sqlRows.join('\n');
+                    break;
+                case 'xlsx':
+                    const worksheet = XLSX.utils.json_to_sheet(data);
+                    const workbook = XLSX.utils.book_new();
+                    XLSX.utils.book_append_sheet(workbook, worksheet, 'Results');
+                    content = XLSX.write(workbook, { type: 'buffer', bookType: 'xlsx' });
+                    break;
+            }
+
+            fs.writeFileSync(uri.fsPath, content);
+            vscode.window.showInformationMessage(`Dados exportados com sucesso para: ${path.basename(uri.fsPath)}`);
+            
+            // Pergunta se quer abrir o arquivo
+            const openAction = 'Abrir Arquivo';
+            vscode.window.showInformationMessage('Exportação concluída!', openAction).then(selection => {
+                if (selection === openAction) {
+                    vscode.workspace.openTextDocument(uri).then(doc => vscode.window.showTextDocument(doc));
+                }
+            });
+
+        } catch (err: any) {
+            vscode.window.showErrorMessage(`Erro ao exportar: ${err.message}`);
+        }
     }
 
     public updateResults(data: any[], query: string, connection: any) {

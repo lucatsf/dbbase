@@ -145,6 +145,37 @@ export function getTableHtml(data: any[]) {
                 font-size: inherit;
                 outline: none;
             }
+
+            /* Dropdown Menu */
+            .export-dropdown {
+                position: relative;
+                display: inline-block;
+            }
+            .dropdown-content {
+                display: none;
+                position: absolute;
+                background-color: var(--header-bg);
+                min-width: 120px;
+                box-shadow: 0px 8px 16px 0px rgba(0,0,0,0.2);
+                z-index: 100;
+                border: 1px solid var(--border);
+                border-radius: 4px;
+                top: 100%;
+                left: 0;
+            }
+            .dropdown-content a {
+                color: var(--text);
+                padding: 8px 12px;
+                text-decoration: none;
+                display: block;
+                font-size: 11px;
+            }
+            .dropdown-content a:hover {
+                background-color: var(--row-hover);
+            }
+            .export-dropdown:hover .dropdown-content {
+                display: block;
+            }
         </style>
     </head>
     <body>
@@ -160,6 +191,20 @@ export function getTableHtml(data: any[]) {
                 <button id="cancelBtn" class="icon-btn cancel" title="Descartar Alterações" disabled>
                     <svg viewBox="0 0 16 16" xmlns="http://www.w3.org/2000/svg"><path d="M7.061 8l-2.78-2.781a.665.665 0 1 1 .94-.94L8 7.061l2.781-2.78a.665.665 0 1 1 .94.94L8.939 8l2.782 2.781a.665.665 0 1 1-.941.94L8 8.939l-2.781 2.782a.665.665 0 1 1-.94-.941L7.061 8z"/></svg>
                 </button>
+                <div style="width: 1px; height: 14px; background: var(--border); margin: 0 6px;"></div>
+                <div class="export-dropdown">
+                    <button id="exportBtn" class="icon-btn" title="Exportar Dados">
+                        <svg viewBox="0 0 16 16" xmlns="http://www.w3.org/2000/svg"><path fill-rule="evenodd" clip-rule="evenodd" d="M13.5 1h-11l-.5.5v13l.5.5h11l.5-.5v-13l-.5-.5zm-.5 13h-10V2h10v12zM4.5 9h7v1h-7V9zm7-2h-7v1h7V7zm-7-2h7v1h-7V5z"/></svg>
+                        <span style="font-size: 10px; margin-left: 4px;">Export</span>
+                    </button>
+                    <div id="exportMenu" class="dropdown-content">
+                        <a href="#" data-format="csv">CSV</a>
+                        <a href="#" data-format="json">JSON</a>
+                        <a href="#" data-format="xlsx">Excel (XLSX)</a>
+                        <a href="#" data-format="md">Markdown</a>
+                        <a href="#" data-format="sql">SQL Inserts</a>
+                    </div>
+                </div>
                 <div class="info-text">
                     <span id="rowCount">${data.length} rows</span>
                 </div>
@@ -274,6 +319,18 @@ export function getTableHtml(data: any[]) {
             saveBtn.onclick = doSave;
             cancelBtn.onclick = doCancel;
             refreshBtn.onclick = () => vscode.postMessage({ command: 'refresh' });
+
+            // Export logic
+            document.querySelectorAll('.dropdown-content a').forEach(item => {
+                item.addEventListener('click', event => {
+                    const format = event.target.getAttribute('data-format');
+                    vscode.postMessage({ 
+                        command: 'exportData', 
+                        format: format,
+                        data: ${JSON.stringify(data)} 
+                    });
+                });
+            });
 
             window.addEventListener('keydown', (e) => {
                 if (e.ctrlKey && e.key === 'Enter') doSave();
