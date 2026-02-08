@@ -13,6 +13,11 @@
     "Data Science",
     "Other"
   ],
+  "homepage": "https://dbbase.com.br/",
+  "repository": {
+    "type": "git",
+    "url": "https://github.com/lucatsf/dbbase"
+  },
   "activationEvents": [
     "onLanguage:sql"
   ],
@@ -53,14 +58,16 @@
       "dbbase-explorer": [
         {
           "id": "dbbase-connections",
-          "name": "Conexões"
+          "name": "Conexões",
+          "icon": "$(database)"
         }
       ],
       "dbbase-results-container": [
         {
           "id": "dbbase.resultsView",
           "type": "webview",
-          "name": "Resultados"
+          "name": "Resultados",
+          "icon": "$(table)"
         }
       ]
     },

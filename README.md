@@ -22,23 +22,28 @@
 ## 🚀 Key Features
 
 ### 📊 Professional Data Grid
+
 - **High Fidelity:** A grid UI inspired by DataGrip/DBeaver.
 - **Inline Editing:** Edit your data directly in the grid and commit changes with a single click.
 - **Native Look & Feel:** Fully integrated with VS Code theme variables for a seamless experience.
 
 ### 🔍 Schema Explorer
+
 - **Multi-level Hierarchy:** Easily navigate through your connections and tables.
 - **Lazy Loading:** High performance even with thousands of tables.
 - **Live Status:** Real-time online/offline indicators (🟢/🔴) for every connection.
 
 ### 🤖 AI-Ready with Native MCP
+
 - **MCP Server Integration:** Built-in Model Context Protocol (MCP) server.
 - **Context for Copilot/Claude:** Give your AI models (GitHub Copilot, Claude Desktop) direct and secure context of your database schema.
 - **Semantic Metadata:** Automatically shares table comments and constraints with your AI for smarter query generation.
 - **One-Click Setup:** Automatically configures Claude Desktop for you.
 
 ### 📥 Enterprise Data Export
+
 Export your query results into multiple professional formats:
+
 - 📑 **Excel (.xlsx)** (Perfect for business reports)
 - 📝 **CSV** (Classic data interchange)
 - 📄 **JSON** (API-ready formats)
@@ -46,17 +51,20 @@ Export your query results into multiple professional formats:
 - 💾 **SQL Inserts** (Easy migrations)
 
 ### 🛠️ Built for Performance
+
 - **Modular Architecture:** Isolated database drivers (Postgres & MySQL).
 - **Security First:** Uses VS Code's `SecretStorage` for sensitive credentials.
 - **Safe Execution:** Automatic protection against accidental data modification.
 
 ## 📦 Supported Databases
+
 - ✅ **PostgreSQL**
 - ✅ **MySQL / MariaDB**
 - ⏳ *SQLite (Coming Soon)*
 - ⏳ *SQL Server (Coming Soon)*
 
 ## ⌨️ Shortcuts
+
 | Command | Shortcut |
 | --- | --- |
 | **Run Query (at cursor)** | `Ctrl + Enter` / `Cmd + Enter` |
@@ -64,41 +72,24 @@ Export your query results into multiple professional formats:
 | **Save Grid Changes** | `Alt + S` (within grid) |
 
 ## 🛠️ Getting Started
+
 1. Install **DBBase** from the Marketplace.
 2. Go to the **DBBase Activity Bar** icon.
 3. Click the `+` icon to add a new connection.
 4. Select your connection and start writing SQL!
 
 ### Configuring for AI (Claude Desktop)
+
 1. Ensure your database is connected in DBBase.
 2. Open the Command Palette (`Ctrl+Shift+P`).
 3. Run `DBBase: Configurar Servidor MCP (Claude Desktop)`.
 4. Restart Claude and ask: *"What's in my database?"*
 
 ## 📜 License
+
 This project is licensed under the [MIT License](LICENSE).
 
 ---
 <p align="center">Made with ❤️ for the Database Community</p>
-
-
-## Following extension guidelines
-
-Ensure that you've read through the extensions guidelines and follow the best practices for creating your extension.
-
-* [Extension Guidelines](https://code.visualstudio.com/api/references/extension-guidelines)
-
-## Working with Markdown
-
-You can author your README using Visual Studio Code. Here are some useful editor keyboard shortcuts:
-
-* Split the editor (`Cmd+\` on macOS or `Ctrl+\` on Windows and Linux).
-* Toggle preview (`Shift+Cmd+V` on macOS or `Shift+Ctrl+V` on Windows and Linux).
-* Press `Ctrl+Space` (Windows, Linux, macOS) to see a list of Markdown snippets.
-
-## For more information
-
-* [Visual Studio Code's Markdown Support](http://code.visualstudio.com/docs/languages/markdown)
-* [Markdown Syntax Reference](https://help.github.com/articles/markdown-basics/)
 
 **Enjoy!**
