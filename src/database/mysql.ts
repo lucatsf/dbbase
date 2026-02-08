@@ -54,4 +54,16 @@ export class MySQLDriver extends BaseDriver {
             this.connection = undefined;
         }
     }
+
+    async getTables(): Promise<string[]> {
+        const sql = `
+            SELECT TABLE_NAME as name
+            FROM information_schema.tables 
+            WHERE table_schema = DATABASE() 
+            AND table_type = 'BASE TABLE'
+            ORDER BY TABLE_NAME;
+        `;
+        const result = await this.query(sql);
+        return result.rows.map(r => r.name || r.TABLE_NAME || r.table_name);
+    }
 }

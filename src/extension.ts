@@ -111,6 +111,26 @@ export function activate(context: vscode.ExtensionContext) {
         await vscode.window.showTextDocument(doc, vscode.ViewColumn.One);
     }));
 
+    context.subscriptions.push(vscode.commands.registerCommand('dbbase.openTable', async (tableName: string, conn: Connection) => {
+        if (!tableName) {
+            vscode.window.showErrorMessage("Erro: Nome da tabela não identificado.");
+            return;
+        }
+
+        activeConnection = conn;
+        updateStatusBar();
+        
+        const sql = `SELECT * FROM ${activeConnection.type === 'mysql' ? `\`${tableName}\`` : `"${tableName}"`} LIMIT 50;`;
+        const doc = await vscode.workspace.openTextDocument({ 
+            language: 'sql', 
+            content: `-- DBBase: ${tableName}\n${sql}\n` 
+        });
+        await vscode.window.showTextDocument(doc, vscode.ViewColumn.One);
+        
+        // Opcional: Executar automaticamente a query
+        vscode.commands.executeCommand('dbbase.runQuery');
+    }));
+
     // Comandos da Sidebar
     context.subscriptions.push(vscode.commands.registerCommand('dbbase.addConnection', () => connectionsProvider.addConnection()));
     context.subscriptions.push(vscode.commands.registerCommand('dbbase.editConnection', (node) => connectionsProvider.editConnection(node)));

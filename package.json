@@ -69,6 +69,10 @@
       {
         "command": "dbbase.runQuery",
         "title": "DBBase: Executar Query"
+      },
+      {
+        "command": "dbbase.openTable",
+        "title": "DBBase: Abrir Tabela"
       }
     ],
     "menus": {

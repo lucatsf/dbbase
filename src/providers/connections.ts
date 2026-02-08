@@ -1,19 +1,38 @@
 import * as vscode from 'vscode';
 import { Connection } from '../types';
+import { DriverFactory } from '../database';
 
-export class ConnectionsProvider implements vscode.TreeDataProvider<ConnectionItem> {
-    private _onDidChangeTreeData = new vscode.EventEmitter<ConnectionItem | undefined>();
+export class ConnectionsProvider implements vscode.TreeDataProvider<vscode.TreeItem> {
+    private _onDidChangeTreeData = new vscode.EventEmitter<vscode.TreeItem | undefined>();
     readonly onDidChangeTreeData = this._onDidChangeTreeData.event;
 
     constructor(private context: vscode.ExtensionContext) {}
 
-    getTreeItem(element: ConnectionItem): vscode.TreeItem {
+    getTreeItem(element: vscode.TreeItem): vscode.TreeItem {
         return element;
     }
 
-    async getChildren(): Promise<ConnectionItem[]> {
-        const conns = this.context.globalState.get<Connection[]>('connections', []);
-        return conns.map(c => new ConnectionItem(c));
+    async getChildren(element?: vscode.TreeItem): Promise<vscode.TreeItem[]> {
+        if (!element) {
+            const conns = this.context.globalState.get<Connection[]>('connections', []);
+            return conns.map(c => new ConnectionItem(c));
+        }
+
+        if (element instanceof ConnectionItem) {
+            try {
+                const driver = DriverFactory.create(element.info);
+                await driver.connect();
+                const tables = await driver.getTables();
+                await driver.disconnect();
+
+                return tables.map(table => new TableItem(table, element.info));
+            } catch (err: any) {
+                vscode.window.showErrorMessage(`Erro ao carregar tabelas: ${err.message}`);
+                return [];
+            }
+        }
+
+        return [];
     }
 
     saveConnection(conn: Connection, isEdit = false) {
@@ -81,14 +100,32 @@ export class ConnectionsProvider implements vscode.TreeDataProvider<ConnectionIt
 
 export class ConnectionItem extends vscode.TreeItem {
     constructor(public readonly info: Connection) {
-        super(info.label, vscode.TreeItemCollapsibleState.None);
+        super(info.label, vscode.TreeItemCollapsibleState.Collapsed);
         this.description = `${info.type} (${info.host})`;
         this.iconPath = new vscode.ThemeIcon(info.type === 'postgres' ? 'database' : 'server');
         this.contextValue = 'connection';
+        // Removemos o comando de clique padrão para não conflitar com a expansão (opcional)
+        // Ou mantemos se quisermos que selecione e expanda ao mesmo tempo.
         this.command = { 
             command: 'dbbase.selectConnection', 
             title: 'Selecionar', 
             arguments: [info] 
+        };
+    }
+}
+
+export class TableItem extends vscode.TreeItem {
+    constructor(
+        public readonly tableName: string,
+        public readonly connection: Connection
+    ) {
+        super(tableName, vscode.TreeItemCollapsibleState.None);
+        this.iconPath = new vscode.ThemeIcon('table');
+        this.contextValue = 'table';
+        this.command = {
+            command: 'dbbase.openTable',
+            title: 'Abrir Tabela',
+            arguments: [tableName, connection]
         };
     }
 }

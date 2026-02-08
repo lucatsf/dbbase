@@ -4,6 +4,7 @@ export interface IDatabaseDriver {
     connect(): Promise<void>;
     query(sql: string, params?: any[]): Promise<QueryResult>;
     disconnect(): Promise<void>;
+    getTables(): Promise<string[]>;
 }
 
 export abstract class BaseDriver implements IDatabaseDriver {
@@ -11,4 +12,5 @@ export abstract class BaseDriver implements IDatabaseDriver {
     abstract connect(): Promise<void>;
     abstract query(sql: string, params?: any[]): Promise<QueryResult>;
     abstract disconnect(): Promise<void>;
+    abstract getTables(): Promise<string[]>;
 }

@@ -55,4 +55,16 @@ export class PostgresDriver extends BaseDriver {
             this.client = undefined;
         }
     }
+
+    async getTables(): Promise<string[]> {
+        const sql = `
+            SELECT table_name as name
+            FROM information_schema.tables 
+            WHERE table_schema = 'public' 
+            AND table_type = 'BASE TABLE'
+            ORDER BY table_name;
+        `;
+        const result = await this.query(sql);
+        return result.rows.map(r => r.name || r.table_name);
+    }
 }
