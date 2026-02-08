@@ -2,7 +2,7 @@
   "name": "dbbase",
   "displayName": "DBBase - Professional Database Manager & MCP",
   "description": "Professional SQL client with DBeaver/DataGrip fluidity. High-performance grid, native MCP for AI context (Copilot/Claude), and advanced exports for Postgres & MySQL.",
-  "publisher": "dbbase-team",
+  "publisher": "DBbase",
   "icon": "resources/icon.png",
   "version": "1.0.0",
   "engines": {
