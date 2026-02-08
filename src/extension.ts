@@ -110,39 +110,63 @@ export function activate(context: vscode.ExtensionContext) {
             return;
         }
 
-        let sql = editor.document.getText(editor.selection.isEmpty ? undefined : editor.selection).trim();
+        let sql = '';
+        const selection = editor.selection;
+
+        if (!selection.isEmpty) {
+            // 1. Prioridade: Texto selecionado
+            sql = editor.document.getText(selection).trim();
+        } else {
+            // 2. Inteligência: Executar query sob o cursor ou bloco de texto atual
+            const text = editor.document.getText();
+            const cursorOffset = editor.document.offsetAt(editor.selection.active);
+            
+            // Dividir o texto em queries baseadas em ponto e vírgula
+            const queries = text.split(';');
+            let currentOffset = 0;
+            
+            for (let query of queries) {
+                const queryLength = query.length + 1; // +1 devido ao ';' removido pelo split
+                if (cursorOffset >= currentOffset && cursorOffset < currentOffset + queryLength) {
+                    sql = query.trim();
+                    // Adicionar de volta o ponto e vírgula se existia originalmente
+                    if (text.charAt(currentOffset + query.length) === ';') {
+                        sql += ';';
+                    }
+                    break;
+                }
+                currentOffset += queryLength;
+            }
+
+            // Se ainda não encontrou (cursor no final do arquivo), tenta a linha atual
+            if (!sql) {
+                sql = editor.document.lineAt(editor.selection.active.line).text.trim();
+            }
+        }
+
         if (!sql) {
             return;
         }
 
-        // --- NOVA LÓGICA DE VALIDAÇÃO DE PONTO E VÍRGULA ---
-        // Padrão: Se a query começa com INSERT, UPDATE ou DELETE, ela PRECISA terminar com ;
+        // --- VALIDAÇÃO DE PONTO E VÍRGULA ---
         const isDataChangeQuery = /^(INSERT|UPDATE|DELETE|CREATE|DROP|ALTER)/i.test(sql);
         
         if (isDataChangeQuery && !sql.endsWith(';')) {
             vscode.window.showErrorMessage("⚠️ Query de alteração de dados precisa terminar com ';' por segurança.");
             return;
         }
-        // --------------------------------------------------
+        // ------------------------------------
 
         lastExecutedSql = sql;
-
-        // Mostrar o painel de resultados
         vscode.commands.executeCommand('dbbase.resultsView.focus');
 
         try {
             let rows: any[] = [];
+            const startTime = Date.now();
             
             const { type, host, port, user, password, database } = activeConnection;
-            
-            console.log(`[DBBASE-LOG] Conectando ao ${type} em ${host}:${port}`);
 
             if (type === 'postgres') {
-                // Alerta se a porta parecer errada
-                if (port === 3306) {
-                    vscode.window.showWarningMessage("Aviso: Você está usando Postgres na porta 3306 (padrão MySQL). Verifique as configurações.");
-                }
-
                 const client = new PGClient({
                     user: user,
                     host: host,
@@ -155,27 +179,20 @@ export function activate(context: vscode.ExtensionContext) {
                 try {
                     await client.connect();
                     const res = await client.query(sql);
+                    const executionTime = Date.now() - startTime;
                     
-                    // Ajuste para queries que não retornam linhas (INSERT/UPDATE/DELETE)
                     if (Array.isArray(res)) {
-                        // Caso de múltiplas queries
                         rows = res[res.length - 1].rows || [];
                     } else {
                         rows = res.rows || [];
-                        // Se for uma query de alteração sem retorno, mostramos o count
                         if ((res.command === 'UPDATE' || res.command === 'INSERT' || res.command === 'DELETE') && rows.length === 0) {
-                            rows = [{ status: "Success", command: res.command, rows_affected: res.rowCount }];
+                            rows = [{ status: "Success", command: res.command, rows_affected: res.rowCount, time: `${executionTime}ms` }];
                         }
                     }
                 } finally {
                     await client.end().catch(() => {});
                 }
             } else {
-                // MySQL
-                if (port === 5432) {
-                    vscode.window.showWarningMessage("Aviso: Você está usando MySQL na porta 5432 (padrão Postgres). Verifique as configurações.");
-                }
-
                 const conn = await mysql.createConnection({
                     host: host,
                     user: user,
@@ -183,21 +200,20 @@ export function activate(context: vscode.ExtensionContext) {
                     database: database,
                     port: port,
                     connectTimeout: 5000,
-                    multipleStatements: true // Permite rodar múltiplas queries separadas por ;
+                    multipleStatements: true
                 });
                 try {
                     const [result] = await conn.execute(sql);
+                    const executionTime = Date.now() - startTime;
                     
                     if (Array.isArray(result)) {
                         rows = result as any[];
                     } else {
-                        // Caso de INSERT/UPDATE no MySQL (result não é array)
                         const resObj = result as any;
                         rows = [{ 
                             status: "Success", 
                             affectedRows: resObj.affectedRows, 
-                            insertId: resObj.insertId,
-                            warningStatus: resObj.warningStatus
+                            time: `${executionTime}ms`
                         }];
                     }
                 } finally {
@@ -425,6 +441,14 @@ function getTableHtml(data: any[]) {
                 gap: 2px;
                 height: 32px;
             }
+            .info-text {
+                font-size: 11px;
+                color: var(--vscode-descriptionForeground);
+                margin-left: auto;
+                padding-right: 8px;
+                display: flex;
+                gap: 12px;
+            }
             .icon-btn {
                 background: transparent;
                 color: var(--vscode-foreground);
@@ -528,6 +552,9 @@ function getTableHtml(data: any[]) {
                 <button id="cancelBtn" class="icon-btn cancel" title="Descartar Alterações" disabled>
                     <svg viewBox="0 0 16 16" xmlns="http://www.w3.org/2000/svg"><path d="M7.061 8l-2.78-2.781a.665.665 0 1 1 .94-.94L8 7.061l2.781-2.78a.665.665 0 1 1 .94.94L8.939 8l2.782 2.781a.665.665 0 1 1-.941.94L8 8.939l-2.781 2.782a.665.665 0 1 1-.94-.941L7.061 8z"/></svg>
                 </button>
+                <div class="info-text">
+                    <span id="rowCount">${data.length} rows</span>
+                </div>
             </div>
             <div class="table-container">
                 <table id="resultsTable">
