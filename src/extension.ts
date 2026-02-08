@@ -16,11 +16,16 @@ interface Connection {
 // Variável global ao arquivo para persistir a seleção durante a sessão
 let activeConnection: Connection | undefined = undefined;
 let statusBarItem: vscode.StatusBarItem;
+let resultsProvider: ResultsViewProvider;
 
 export function activate(context: vscode.ExtensionContext) {
     console.log('DBBase Extension está ativa!');
     
-    let panel: vscode.WebviewPanel | undefined = undefined;
+    // Inicializar Provider de Resultados (Painel Inferior)
+    resultsProvider = new ResultsViewProvider(context.extensionUri);
+    context.subscriptions.push(
+        vscode.window.registerWebviewViewProvider('dbbase.resultsView', resultsProvider)
+    );
 
     // Inicializar Barra de Status
     statusBarItem = vscode.window.createStatusBarItem(vscode.StatusBarAlignment.Right, 100);
@@ -93,8 +98,7 @@ export function activate(context: vscode.ExtensionContext) {
     context.subscriptions.push(vscode.commands.registerCommand('dbbase.runQuery', async () => {
         // Log para confirmar que ESTA extensão está sendo chamada
         console.log('[DBBASE-LOG] Comando runQuery disparado');
-        vscode.window.showInformationMessage('DBBase: Executando Query...');
-
+        
         if (!activeConnection) {
             vscode.window.showErrorMessage("Selecione um banco na Sidebar do DBBase!");
             return;
@@ -110,10 +114,8 @@ export function activate(context: vscode.ExtensionContext) {
             return;
         }
 
-        if (!panel) {
-            panel = vscode.window.createWebviewPanel('dbResults', 'Resultados: DBBase', vscode.ViewColumn.Two, { enableScripts: true });
-            panel.onDidDispose(() => { panel = undefined; });
-        }
+        // Mostrar o painel de resultados
+        vscode.commands.executeCommand('dbbase.resultsView.focus');
 
         try {
             let rows: any[] = [];
@@ -165,13 +167,41 @@ export function activate(context: vscode.ExtensionContext) {
                     await conn.end().catch(() => {});
                 }
             }
-            panel.webview.html = getTableHtml(rows);
+            resultsProvider.updateHtml(getTableHtml(rows));
         } catch (err: any) {
             const errorMsg = err.message || 'Erro desconhecido';
-            vscode.window.showErrorMessage(`ERRO NO ${activeConnection.type.toUpperCase()}: ${errorMsg} (Host: ${activeConnection.host}:${activeConnection.port})`);
-            console.error('Erro completo de conexão:', err);
+            const errorHtml = `
+                <body style="background:var(--vscode-editor-background);color:var(--vscode-errorForeground);padding:20px;font-family:sans-serif;">
+                    <h3>❌ Erro na Query</h3>
+                    <code>${errorMsg}</code>
+                    <p style="font-size:11px;color:var(--vscode-descriptionForeground)">Verifique as credenciais e o host (${activeConnection.host}:${activeConnection.port})</p>
+                </body>`;
+            resultsProvider.updateHtml(errorHtml);
+            vscode.window.showErrorMessage(`ERRO NO ${activeConnection.type.toUpperCase()}: ${errorMsg}`);
         }
     }));
+}
+
+class ResultsViewProvider implements vscode.WebviewViewProvider {
+    private _view?: vscode.WebviewView;
+
+    constructor(private readonly _extensionUri: vscode.Uri) {}
+
+    resolveWebviewView(webviewView: vscode.WebviewView) {
+        this._view = webviewView;
+        webviewView.webview.options = { enableScripts: true };
+        webviewView.webview.html = `
+            <body style="background:var(--vscode-editor-background);color:var(--vscode-descriptionForeground);display:flex;justify-content:center;align-items:center;height:100vh;margin:0;font-family:sans-serif;">
+                Aguardando execução da query...
+            </body>`;
+    }
+
+    updateHtml(html: string) {
+        if (this._view) {
+            this._view.show?.(true);
+            this._view.webview.html = html;
+        }
+    }
 }
 
 async function promptForConnection(existing?: Connection): Promise<Connection | undefined> {
@@ -241,16 +271,133 @@ class ConnectionItem extends vscode.TreeItem {
 
 function getTableHtml(data: any[]) {
     if (!data.length) {
-        return `<body style="background:var(--vscode-editor-background);color:white;padding:20px">Query executada com sucesso. Nenhuma linha retornada.</body>`;
+        return `
+            <body style="background:var(--vscode-editor-background);color:var(--vscode-disabledForeground);display:flex;justify-content:center;align-items:center;height:100vh;margin:0;font-family:sans-serif;">
+                <div style="text-align:center;">
+                    <div style="font-size: 2em; margin-bottom: 10px;">∅</div>
+                    Query executada com sucesso. Nenhuma linha retornada.
+                </div>
+            </body>`;
     }
+
     const headers = Object.keys(data[0]);
-    return `<html><head><style>
-        body { background: var(--vscode-editor-background); color: var(--vscode-editor-foreground); font-family: sans-serif; font-size: 12px; }
-        table { border-collapse: collapse; width: 100%; border: 1px solid var(--vscode-panel-border); }
-        th { background: var(--vscode-editor-lineHighlightBackground); padding: 8px; text-align: left; position: sticky; top: 0; border-bottom: 2px solid var(--vscode-panel-border); }
-        td { padding: 8px; border-bottom: 1px solid var(--vscode-panel-border); }
-    </style></head><body><table>
-        <thead><tr>${headers.map(h => `<th>${h}</th>`).join('')}</tr></thead>
-        <tbody>${data.map(r => `<tr>${headers.map(h => `<td>${r[h]}</td>`).join('')}</tr>`).join('')}</tbody>
-    </table></body></html>`;
+
+    return `<!DOCTYPE html>
+    <html lang="en">
+    <head>
+        <meta charset="UTF-8">
+        <style>
+            :root {
+                --border: var(--vscode-panel-border);
+                --header-bg: var(--vscode-sideBar-background);
+                --row-hover: var(--vscode-list-hoverBackground);
+                --text: var(--vscode-editor-foreground);
+                --accent: var(--vscode-button-background);
+            }
+            body { 
+                background: var(--vscode-editor-background); 
+                color: var(--text); 
+                font-family: var(--vscode-font-family, 'Segoe UI', sans-serif); 
+                margin: 0; 
+                padding: 0;
+                overflow: hidden;
+            }
+            .container {
+                display: flex;
+                flex-direction: column;
+                height: 100vh;
+                width: 100vw;
+            }
+            .toolbar {
+                padding: 8px 12px;
+                background: var(--header-bg);
+                border-bottom: 1px solid var(--border);
+                font-size: 11px;
+                color: var(--vscode-descriptionForeground);
+                display: flex;
+                justify-content: space-between;
+            }
+            .table-container {
+                flex: 1;
+                overflow: auto;
+                position: relative;
+            }
+            table { 
+                border-collapse: separate; 
+                border-spacing: 0;
+                width: 100%; 
+                font-size: 12px;
+            }
+            th { 
+                background: var(--header-bg); 
+                padding: 6px 10px; 
+                text-align: left; 
+                position: sticky; 
+                top: 0; 
+                z-index: 10;
+                border-bottom: 1px solid var(--border);
+                border-right: 1px solid var(--border);
+                white-space: nowrap;
+                font-weight: 600;
+                color: var(--vscode-symbolIcon-propertyForeground);
+            }
+            td { 
+                padding: 4px 10px; 
+                border-bottom: 1px solid var(--border); 
+                border-right: 1px solid var(--border);
+                white-space: nowrap;
+                max-width: 300px;
+                overflow: hidden;
+                text-overflow: ellipsis;
+            }
+            tr:hover td {
+                background: var(--row-hover);
+            }
+            .row-num {
+                width: 30px;
+                text-align: center;
+                background: var(--header-bg);
+                color: var(--vscode-descriptionForeground);
+                font-size: 10px;
+                border-right: 1px solid var(--border);
+            }
+            /* Scrollbar styling */
+            ::-webkit-scrollbar { width: 10px; height: 10px; }
+            ::-webkit-scrollbar-corner { background: var(--vscode-editor-background); }
+            ::-webkit-scrollbar-thumb { background: var(--vscode-scrollbarSlider-background); }
+            ::-webkit-scrollbar-thumb:hover { background: var(--vscode-scrollbarSlider-hoverBackground); }
+        </style>
+    </head>
+    <body>
+        <div class="container">
+            <div class="toolbar">
+                <span>${data.length} linhas retornadas</span>
+                <span>DBBase Grid View</span>
+            </div>
+            <div class="table-container">
+                <table>
+                    <thead>
+                        <tr>
+                            <th class="row-num">#</th>
+                            ${headers.map(h => `<th>${h}</th>`).join('')}
+                        </tr>
+                    </thead>
+                    <tbody>
+                        ${data.map((r, i) => `
+                            <tr>
+                                <td class="row-num">${i + 1}</td>
+                                ${headers.map(h => {
+                                    const val = r[h];
+                                    const displayVal = val === null ? '<i style="opacity:0.5">NULL</i>' : 
+                                                      (typeof val === 'object' ? JSON.stringify(val) : val);
+                                    return `<td>${displayVal}</td>`;
+                                }).join('')}
+                            </tr>
+                        `).join('')}
+                    </tbody>
+                </table>
+            </div>
+        </div>
+    </body>
+    </html>`;
 }

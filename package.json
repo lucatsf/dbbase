@@ -21,6 +21,13 @@
           "title": "DBBase",
           "icon": "$(database)"
         }
+      ],
+      "panel": [
+        {
+          "id": "dbbase-results-container",
+          "title": "DBBase: Resultados",
+          "icon": "$(table)"
+        }
       ]
     },
     "views": {
@@ -28,6 +35,13 @@
         {
           "id": "dbbase-connections",
           "name": "Conexões"
+        }
+      ],
+      "dbbase-results-container": [
+        {
+          "id": "dbbase.resultsView",
+          "type": "webview",
+          "name": "Tabela de Resultados"
         }
       ]
     },
