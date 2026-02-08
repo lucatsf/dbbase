@@ -17,6 +17,7 @@ interface Connection {
 let activeConnection: Connection | undefined = undefined;
 let statusBarItem: vscode.StatusBarItem;
 let resultsProvider: ResultsViewProvider;
+let lastExecutedSql: string = '';
 
 export function activate(context: vscode.ExtensionContext) {
     console.log('DBBase Extension está ativa!');
@@ -114,6 +115,8 @@ export function activate(context: vscode.ExtensionContext) {
             return;
         }
 
+        lastExecutedSql = sql;
+
         // Mostrar o painel de resultados
         vscode.commands.executeCommand('dbbase.resultsView.focus');
 
@@ -190,10 +193,78 @@ class ResultsViewProvider implements vscode.WebviewViewProvider {
     resolveWebviewView(webviewView: vscode.WebviewView) {
         this._view = webviewView;
         webviewView.webview.options = { enableScripts: true };
+        
+        webviewView.webview.onDidReceiveMessage(async (message) => {
+            if (message.command === 'updateCell') {
+                await this.handleUpdateCell(message.data);
+            } else if (message.command === 'refresh') {
+                vscode.commands.executeCommand('dbbase.runQuery');
+            }
+        });
+
         webviewView.webview.html = `
             <body style="background:var(--vscode-editor-background);color:var(--vscode-descriptionForeground);display:flex;justify-content:center;align-items:center;height:100vh;margin:0;font-family:sans-serif;">
                 Aguardando execução da query...
             </body>`;
+    }
+
+    private async handleUpdateCell(data: { column: string, value: any, rowData: any }) {
+        if (!activeConnection) {
+            return;
+        }
+
+        // Tentar extrair o nome da tabela do SQL
+        const tableMatch = lastExecutedSql.match(/FROM\s+([a-zA-Z0-9_.-]+)/i);
+        const tableName = tableMatch ? tableMatch[1] : null;
+
+        if (!tableName) {
+            vscode.window.showErrorMessage("Não foi possível identificar a tabela para o update.");
+            return;
+        }
+
+        // Tentar identificar a PK (preferência por 'id')
+        const pkColumn = Object.keys(data.rowData).find(k => k.toLowerCase() === 'id') || Object.keys(data.rowData)[0];
+        const pkValue = data.rowData[pkColumn];
+
+        if (pkValue === undefined) {
+            vscode.window.showErrorMessage("Não foi possível identificar uma chave primária (ID) para atualizar.");
+            return;
+        }
+
+        const type = activeConnection.type;
+        const updateSql = type === 'postgres' 
+            ? `UPDATE ${tableName} SET "${data.column}" = $1 WHERE "${pkColumn}" = $2`
+            : `UPDATE ${tableName} SET \`${data.column}\` = ? WHERE \`${pkColumn}\` = ?`;
+
+        const params = [data.value, pkValue];
+
+        try {
+            if (type === 'postgres') {
+                const client = new PGClient({
+                    user: activeConnection.user,
+                    host: activeConnection.host,
+                    database: activeConnection.database || 'postgres',
+                    password: activeConnection.password,
+                    port: activeConnection.port,
+                });
+                await client.connect();
+                await client.query(updateSql, params);
+                await client.end();
+            } else {
+                const conn = await mysql.createConnection({
+                    host: activeConnection.host,
+                    user: activeConnection.user,
+                    password: activeConnection.password,
+                    database: activeConnection.database,
+                    port: activeConnection.port
+                });
+                await conn.execute(updateSql, params);
+                await conn.end();
+            }
+            vscode.window.showInformationMessage(`Registro atualizado com sucesso em ${tableName}!`);
+        } catch (err: any) {
+            vscode.window.showErrorMessage(`Erro ao atualizar: ${err.message}`);
+        }
     }
 
     updateHtml(html: string) {
@@ -293,6 +364,8 @@ function getTableHtml(data: any[]) {
                 --row-hover: var(--vscode-list-hoverBackground);
                 --text: var(--vscode-editor-foreground);
                 --accent: var(--vscode-button-background);
+                --hover-bg: var(--vscode-toolbar-hoverBackground);
+                --modified-bg: rgba(234, 179, 8, 0.15);
             }
             body { 
                 background: var(--vscode-editor-background); 
@@ -309,14 +382,44 @@ function getTableHtml(data: any[]) {
                 width: 100vw;
             }
             .toolbar {
-                padding: 8px 12px;
+                padding: 0 8px;
                 background: var(--header-bg);
                 border-bottom: 1px solid var(--border);
-                font-size: 11px;
-                color: var(--vscode-descriptionForeground);
                 display: flex;
-                justify-content: space-between;
+                justify-content: flex-start;
+                align-items: center;
+                gap: 2px;
+                height: 32px;
             }
+            .icon-btn {
+                background: transparent;
+                color: var(--vscode-foreground);
+                border: none;
+                padding: 6px;
+                border-radius: 3px;
+                cursor: pointer;
+                display: flex;
+                align-items: center;
+                justify-content: center;
+                opacity: 0.8;
+            }
+            .icon-btn:hover:not(:disabled) {
+                background: var(--hover-bg);
+                opacity: 1;
+            }
+            .icon-btn:disabled {
+                opacity: 0.2;
+                cursor: not-allowed;
+            }
+            .icon-btn svg {
+                width: 14px;
+                height: 14px;
+                fill: currentColor;
+            }
+            .icon-btn.save { color: var(--vscode-charts-green); }
+            .icon-btn.cancel { color: var(--vscode-charts-red); }
+            .icon-btn.refresh { color: var(--vscode-foreground); }
+
             .table-container {
                 flex: 1;
                 overflow: auto;
@@ -349,6 +452,11 @@ function getTableHtml(data: any[]) {
                 max-width: 300px;
                 overflow: hidden;
                 text-overflow: ellipsis;
+                cursor: cell;
+            }
+            td.modified {
+                background: var(--modified-bg) !important;
+                outline: 1px solid var(--vscode-charts-yellow);
             }
             tr:hover td {
                 background: var(--row-hover);
@@ -361,21 +469,34 @@ function getTableHtml(data: any[]) {
                 font-size: 10px;
                 border-right: 1px solid var(--border);
             }
-            /* Scrollbar styling */
-            ::-webkit-scrollbar { width: 10px; height: 10px; }
-            ::-webkit-scrollbar-corner { background: var(--vscode-editor-background); }
-            ::-webkit-scrollbar-thumb { background: var(--vscode-scrollbarSlider-background); }
-            ::-webkit-scrollbar-thumb:hover { background: var(--vscode-scrollbarSlider-hoverBackground); }
+            input.edit-input {
+                width: 100%;
+                background: var(--vscode-input-background);
+                color: var(--vscode-input-foreground);
+                border: 1px solid var(--vscode-focusBorder);
+                padding: 2px 4px;
+                font-family: inherit;
+                font-size: inherit;
+                outline: none;
+            }
         </style>
     </head>
     <body>
         <div class="container">
             <div class="toolbar">
-                <span>${data.length} linhas retornadas</span>
-                <span>DBBase Grid View</span>
+                <button id="refreshBtn" class="icon-btn refresh" title="F5 - Atualizar">
+                    <svg viewBox="0 0 16 16" xmlns="http://www.w3.org/2000/svg"><path fill-rule="evenodd" clip-rule="evenodd" d="M4.681 3H2V2h3.5l.5.5V6H5V4a5 5 0 1 0 5 5h1a6 6 0 1 1-6.319-6z"/></svg>
+                </button>
+                <div style="width: 1px; height: 14px; background: var(--border); margin: 0 6px;"></div>
+                <button id="saveBtn" class="icon-btn save" title="Ctrl+Enter - Aplicar Alterações" disabled>
+                    <svg viewBox="0 0 16 16" xmlns="http://www.w3.org/2000/svg"><path d="M13.485 1.929a.75.75 0 0 1 1.06 1.06l-7.5 7.5a.75.75 0 0 1-1.06 0l-3.5-3.5a.75.75 0 1 1 1.06-1.06L6.5 8.869l6.985-6.94z"/></svg>
+                </button>
+                <button id="cancelBtn" class="icon-btn cancel" title="Descartar Alterações" disabled>
+                    <svg viewBox="0 0 16 16" xmlns="http://www.w3.org/2000/svg"><path d="M7.061 8l-2.78-2.781a.665.665 0 1 1 .94-.94L8 7.061l2.781-2.78a.665.665 0 1 1 .94.94L8.939 8l2.782 2.781a.665.665 0 1 1-.941.94L8 8.939l-2.781 2.782a.665.665 0 1 1-.94-.941L7.061 8z"/></svg>
+                </button>
             </div>
             <div class="table-container">
-                <table>
+                <table id="resultsTable">
                     <thead>
                         <tr>
                             <th class="row-num">#</th>
@@ -384,13 +505,12 @@ function getTableHtml(data: any[]) {
                     </thead>
                     <tbody>
                         ${data.map((r, i) => `
-                            <tr>
+                            <tr data-row='${JSON.stringify(r).replace(/'/g, "&apos;")}'>
                                 <td class="row-num">${i + 1}</td>
                                 ${headers.map(h => {
                                     const val = r[h];
-                                    const displayVal = val === null ? '<i style="opacity:0.5">NULL</i>' : 
-                                                      (typeof val === 'object' ? JSON.stringify(val) : val);
-                                    return `<td>${displayVal}</td>`;
+                                    const displayVal = val === null ? 'NULL' : (typeof val === 'object' ? JSON.stringify(val) : val);
+                                    return `<td data-col="${h}">${displayVal}</td>`;
                                 }).join('')}
                             </tr>
                         `).join('')}
@@ -398,6 +518,98 @@ function getTableHtml(data: any[]) {
                 </table>
             </div>
         </div>
+
+        <script>
+            const vscode = acquireVsCodeApi();
+            const table = document.getElementById('resultsTable');
+            const saveBtn = document.getElementById('saveBtn');
+            const cancelBtn = document.getElementById('cancelBtn');
+            const refreshBtn = document.getElementById('refreshBtn');
+            let pendingChanges = [];
+
+            table.addEventListener('dblclick', (e) => {
+                const td = e.target.closest('td');
+                if (!td || td.classList.contains('row-num')) return;
+
+                if (td.querySelector('input')) return;
+
+                const originalValue = td.innerText === 'NULL' ? '' : td.innerText;
+                const colName = td.getAttribute('data-col');
+                const rowData = JSON.parse(td.parentElement.getAttribute('data-row'));
+
+                const input = document.createElement('input');
+                input.className = 'edit-input';
+                input.value = originalValue;
+                
+                td.innerText = '';
+                td.appendChild(input);
+                input.focus();
+
+                input.onblur = () => finishEdit(td, input, originalValue, colName, rowData);
+                input.onkeydown = (ke) => {
+                    if (ke.key === 'Enter') input.blur();
+                    if (ke.key === 'Escape') {
+                        td.innerText = originalValue === '' ? 'NULL' : originalValue;
+                    }
+                };
+            });
+
+            function finishEdit(td, input, originalValue, colName, rowData) {
+                const newValue = input.value;
+                td.innerText = newValue === '' ? 'NULL' : newValue;
+                
+                if (newValue !== originalValue) {
+                    td.classList.add('modified');
+                    pendingChanges.push({
+                        column: colName,
+                        value: newValue,
+                        rowData: rowData,
+                        element: td,
+                        oldValue: originalValue
+                    });
+                    saveBtn.disabled = false;
+                    cancelBtn.disabled = false;
+                }
+            }
+
+            const doSave = () => {
+                if (pendingChanges.length === 0) return;
+                
+                pendingChanges.forEach(change => {
+                    vscode.postMessage({
+                        command: 'updateCell',
+                        data: {
+                            column: change.column,
+                            value: change.value,
+                            rowData: change.rowData
+                        }
+                    });
+                    change.element.classList.remove('modified');
+                });
+
+                pendingChanges = [];
+                saveBtn.disabled = true;
+                cancelBtn.disabled = true;
+            };
+
+            const doCancel = () => {
+                pendingChanges.forEach(change => {
+                    change.element.innerText = change.oldValue === '' ? 'NULL' : change.oldValue;
+                    change.element.classList.remove('modified');
+                });
+                pendingChanges = [];
+                saveBtn.disabled = true;
+                cancelBtn.disabled = true;
+            };
+
+            saveBtn.onclick = doSave;
+            cancelBtn.onclick = doCancel;
+            refreshBtn.onclick = () => vscode.postMessage({ command: 'refresh' });
+
+            window.addEventListener('keydown', (e) => {
+                if (e.ctrlKey && e.key === 'Enter') doSave();
+            });
+        </script>
     </body>
     </html>`;
 }

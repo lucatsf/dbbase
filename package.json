@@ -25,8 +25,8 @@
       "panel": [
         {
           "id": "dbbase-results-container",
-          "title": "DBBase: Resultados",
-          "icon": "$(table)"
+          "title": "DBBase",
+          "icon": "$(database)"
         }
       ]
     },
@@ -41,7 +41,7 @@
         {
           "id": "dbbase.resultsView",
           "type": "webview",
-          "name": "Tabela de Resultados"
+          "name": "Resultados"
         }
       ]
     },
