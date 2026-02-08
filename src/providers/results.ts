@@ -4,6 +4,7 @@ import * as path from 'path';
 import * as XLSX from 'xlsx';
 import { getTableHtml } from '../utils/table-html';
 import { DriverFactory } from '../database';
+import { DataExporter } from '../utils/exporter';
 
 export class ResultsViewProvider implements vscode.WebviewViewProvider {
     public static readonly viewType = 'dbbase.resultsView';
@@ -67,42 +68,20 @@ export class ResultsViewProvider implements vscode.WebviewViewProvider {
 
         try {
             let content: string | Buffer = '';
-            const headers = Object.keys(data[0]);
 
             switch (format) {
                 case 'json':
                     content = JSON.stringify(data, null, 2);
                     break;
                 case 'csv':
-                    const csvRows = [headers.join(',')];
-                    data.forEach(row => {
-                        const values = headers.map(h => {
-                            const val = row[h];
-                            return typeof val === 'string' ? `"${val.replace(/"/g, '""')}"` : val;
-                        });
-                        csvRows.push(values.join(','));
-                    });
-                    content = csvRows.join('\n');
+                    content = DataExporter.toCSV(data);
                     break;
                 case 'md':
-                    const mdRows = [`| ${headers.join(' | ')} |`, `| ${headers.map(() => '---').join(' | ')} |`];
-                    data.forEach(row => {
-                        mdRows.push(`| ${headers.map(h => row[h]).join(' | ')} |`);
-                    });
-                    content = mdRows.join('\n');
+                    content = DataExporter.toMarkdown(data);
                     break;
                 case 'sql':
                     const tableName = this.getTableName(this._lastQuery || 'exported_table');
-                    const sqlRows = data.map(row => {
-                        const cols = headers.join(', ');
-                        const vals = headers.map(h => {
-                            const val = row[h];
-                            if (val === null) return 'NULL';
-                            return typeof val === 'string' ? `'${val.replace(/'/g, "''")}'` : val;
-                        }).join(', ');
-                        return `INSERT INTO ${tableName} (${cols}) VALUES (${vals});`;
-                    });
-                    content = sqlRows.join('\n');
+                    content = DataExporter.toSQL(data, tableName);
                     break;
                 case 'xlsx':
                     const worksheet = XLSX.utils.json_to_sheet(data);
