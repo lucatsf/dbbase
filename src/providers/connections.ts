@@ -1,6 +1,7 @@
 import * as vscode from 'vscode';
 import { Connection } from '../types';
 import { DriverFactory } from '../database';
+import { RedisDriver } from '../database/redis';
 
 export class ConnectionsProvider implements vscode.TreeDataProvider<vscode.TreeItem> {
     private _onDidChangeTreeData = new vscode.EventEmitter<vscode.TreeItem | undefined>();
@@ -42,6 +43,9 @@ export class ConnectionsProvider implements vscode.TreeDataProvider<vscode.TreeI
         }
 
         if (element instanceof ConnectionItem) {
+            if (element.info.type === 'redis') {
+                return this.getRedisChildren(element.info);
+            }
             try {
                 const driver = DriverFactory.create(element.info);
                 await driver.connect();
@@ -63,7 +67,58 @@ export class ConnectionsProvider implements vscode.TreeDataProvider<vscode.TreeI
             }
         }
 
+        if (element instanceof RedisFolderItem) {
+            return this.getRedisChildren(element.connection, element.fullPath + ':');
+        }
+
         return [];
+    }
+
+    private async getRedisChildren(connection: Connection, prefix: string = ''): Promise<vscode.TreeItem[]> {
+        try {
+            const driver = DriverFactory.create(connection) as RedisDriver;
+            await driver.connect();
+            
+            // Usamos SCAN com paginação para não travar
+            // Para simplicidade inicial, pegamos as primeiras 1000 chaves para construir o nível atual
+            const { keys } = await driver.scanKeys('0', prefix + '*', 2000);
+            await driver.disconnect();
+
+            const folders = new Set<string>();
+            const terminalKeys = new Set<string>();
+
+            for (const key of keys) {
+                const relativeKey = key.substring(prefix.length);
+                const parts = relativeKey.split(':');
+                if (parts.length > 1) {
+                    folders.add(parts[0]);
+                } else {
+                    terminalKeys.add(key);
+                }
+            }
+
+            const items: vscode.TreeItem[] = [];
+            
+            // Pastas
+            folders.forEach(folder => {
+                items.push(new RedisFolderItem(folder, prefix + folder, connection));
+            });
+
+            // Chaves
+            terminalKeys.forEach(key => {
+                items.push(new RedisKeyItem(key, connection));
+            });
+
+            return items.sort((a, b) => {
+                if (a instanceof RedisFolderItem && b instanceof RedisKeyItem) return -1;
+                if (a instanceof RedisKeyItem && b instanceof RedisFolderItem) return 1;
+                return (a.label as string).localeCompare(b.label as string);
+            });
+
+        } catch (err: any) {
+            vscode.window.showErrorMessage(`Erro Redis: ${err.message}`);
+            return [];
+        }
     }
 
     saveConnection(conn: Connection, isEdit = false) {
@@ -103,15 +158,18 @@ export class ConnectionsProvider implements vscode.TreeDataProvider<vscode.TreeI
     }
 
     private async promptForConnection(existing?: Connection): Promise<Connection | undefined> {
-        const type = await vscode.window.showQuickPick(['postgres', 'mysql'], { placeHolder: 'Selecione o Tipo' });
+        const type = await vscode.window.showQuickPick(['postgres', 'mysql', 'redis'], { placeHolder: 'Selecione o Tipo' });
         if (!type) { return; }
 
         const label = await vscode.window.showInputBox({ placeHolder: 'Nome da Conexão', value: existing?.label || 'Meu Banco' });
         const host = await vscode.window.showInputBox({ placeHolder: 'Host', value: existing?.host || '127.0.0.1' });
-        const portInput = await vscode.window.showInputBox({ placeHolder: 'Porta', value: existing?.port?.toString() || (type === 'postgres' ? '5432' : '3306') });
-        const user = await vscode.window.showInputBox({ placeHolder: 'Usuário', value: existing?.user || (type === 'postgres' ? 'postgres' : 'root') });
+        const defaultPort = type === 'postgres' ? '5432' : (type === 'mysql' ? '3306' : '6379');
+        const portInput = await vscode.window.showInputBox({ placeHolder: 'Porta', value: existing?.port?.toString() || defaultPort });
+        const user = type !== 'redis' 
+            ? await vscode.window.showInputBox({ placeHolder: 'Usuário', value: existing?.user || (type === 'postgres' ? 'postgres' : 'root') })
+            : 'default';
         const password = await vscode.window.showInputBox({ placeHolder: 'Senha', password: true, value: existing?.password });
-        const database = await vscode.window.showInputBox({ placeHolder: 'Banco de Dados', value: existing?.database || '' });
+        const database = await vscode.window.showInputBox({ placeHolder: type === 'redis' ? 'Índice do Banco (0-15)' : 'Banco de Dados', value: existing?.database || '0' });
 
         if (label && host && portInput && user) {
             return {
@@ -168,6 +226,36 @@ export class TableItem extends vscode.TreeItem {
             command: 'dbbase.openTable',
             title: 'Abrir Tabela',
             arguments: [tableName, connection]
+        };
+    }
+}
+
+export class RedisFolderItem extends vscode.TreeItem {
+    constructor(
+        public readonly label: string,
+        public readonly fullPath: string,
+        public readonly connection: Connection
+    ) {
+        super(label, vscode.TreeItemCollapsibleState.Collapsed);
+        this.iconPath = new vscode.ThemeIcon('folder');
+        this.contextValue = 'redis-folder';
+    }
+}
+
+export class RedisKeyItem extends vscode.TreeItem {
+    constructor(
+        public readonly key: string,
+        public readonly connection: Connection
+    ) {
+        const parts = key.split(':');
+        super(parts[parts.length - 1], vscode.TreeItemCollapsibleState.None);
+        this.iconPath = new vscode.ThemeIcon('key');
+        this.contextValue = 'redis-key';
+        this.description = 'redis';
+        this.command = {
+            command: 'dbbase.openRedisKey',
+            title: 'Abrir Chave',
+            arguments: [key, connection]
         };
     }
 }

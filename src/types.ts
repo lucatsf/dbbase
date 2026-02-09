@@ -1,7 +1,7 @@
 export interface Connection {
     id: string;
     label: string;
-    type: 'postgres' | 'mysql';
+    type: 'postgres' | 'mysql' | 'redis';
     host: string;
     port: number;
     user: string;
