@@ -4,6 +4,7 @@ import * as fs from 'fs';
 import * as os from 'os';
 import { ConnectionsProvider } from './providers/connections';
 import { ResultsViewProvider } from './providers/results';
+import { RedisEditorProvider } from './providers/redis-editor';
 import { DriverFactory } from './database';
 import { Connection } from './types';
 import { getQueryAtCursor } from './utils/query-parser';
@@ -67,6 +68,10 @@ export function activate(context: vscode.ExtensionContext) {
             content: `-- DBBase Editor - ${conn.label}\nSELECT * FROM users;\n` 
         });
         await vscode.window.showTextDocument(doc, vscode.ViewColumn.One);
+    }));
+
+    context.subscriptions.push(vscode.commands.registerCommand('dbbase.openRedisKey', async (key: string, conn: Connection) => {
+        await RedisEditorProvider.open(key, conn, context.extensionUri);
     }));
 
     context.subscriptions.push(vscode.commands.registerCommand('dbbase.runQuery', async () => {
