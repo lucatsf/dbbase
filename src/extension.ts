@@ -62,10 +62,17 @@ export function activate(context: vscode.ExtensionContext) {
 
         vscode.window.showInformationMessage(`Banco Ativo: ${conn.label}`);
         
-        // Abre editor SQL automaticamente
+        // Abre editor SQL automaticamente com conteúdo inicial condicional ao tipo
+        let initialContent = `-- DBBase Editor - ${conn.label}\n`;
+        if (conn.type === 'redis') {
+            initialContent += `GET key_name\n# INFO\n# KEYS *`;
+        } else {
+            initialContent += `SELECT * FROM users;`;
+        }
+
         const doc = await vscode.workspace.openTextDocument({ 
             language: 'sql', 
-            content: `-- DBBase Editor - ${conn.label}\nSELECT * FROM users;\n` 
+            content: initialContent
         });
         await vscode.window.showTextDocument(doc, vscode.ViewColumn.One);
     }));
@@ -85,7 +92,7 @@ export function activate(context: vscode.ExtensionContext) {
             return;
         }
 
-        const sql = getQueryAtCursor(editor);
+        const sql = getQueryAtCursor(editor, activeConnection.type);
         if (!sql) {
             return;
         }

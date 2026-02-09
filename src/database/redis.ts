@@ -21,11 +21,27 @@ export class RedisDriver extends BaseDriver {
     async query(command: string, params?: any[]): Promise<QueryResult> {
         if (!this.client) { throw new Error('Redis not connected'); }
         const start = Date.now();
-        const parts = command.trim().split(/\s+/);
-        const cmd = parts[0];
+        
+        // Remove comentários e linhas vazias
+        const lines = command.split('\n')
+            .map(line => line.trim())
+            .filter(line => line.length > 0 && !line.startsWith('--') && !line.startsWith('#'));
+
+        if (lines.length === 0) {
+            return { rows: [], executionTime: 0 };
+        }
+
+        // Pegamos apenas o primeiro comando válido encontrado se houver múltiplos
+        const currentCommand = lines[0];
+        const parts = currentCommand.split(/\s+/);
+        const cmdName = parts[0].toLowerCase();
         const args = parts.slice(1);
         
-        const result = await (this.client as any)[cmd.toLowerCase()](...args);
+        if (typeof (this.client as any)[cmdName] !== 'function') {
+            throw new Error(`Comando Redis inválido ou não suportado: "${cmdName}"`);
+        }
+        
+        const result = await (this.client as any)[cmdName](...args);
         
         return {
             rows: Array.isArray(result) ? result.map(r => ({ value: r })) : [{ value: result }],
