@@ -4,6 +4,7 @@ import * as fs from 'fs';
 import * as os from 'os';
 import { ConnectionsProvider } from './providers/connections';
 import { ResultsViewProvider } from './providers/results';
+import { RedisEditorProvider } from './providers/redis-editor';
 import { DriverFactory } from './database';
 import { Connection } from './types';
 import { getQueryAtCursor } from './utils/query-parser';
@@ -61,12 +62,23 @@ export function activate(context: vscode.ExtensionContext) {
 
         vscode.window.showInformationMessage(`Banco Ativo: ${conn.label}`);
         
-        // Abre editor SQL automaticamente
+        // Abre editor SQL automaticamente com conteúdo inicial condicional ao tipo
+        let initialContent = `-- DBBase Editor - ${conn.label}\n`;
+        if (conn.type === 'redis') {
+            initialContent += `GET key_name\n# INFO\n# KEYS *`;
+        } else {
+            initialContent += `SELECT * FROM users;`;
+        }
+
         const doc = await vscode.workspace.openTextDocument({ 
             language: 'sql', 
-            content: `-- DBBase Editor - ${conn.label}\nSELECT * FROM users;\n` 
+            content: initialContent
         });
         await vscode.window.showTextDocument(doc, vscode.ViewColumn.One);
+    }));
+
+    context.subscriptions.push(vscode.commands.registerCommand('dbbase.openRedisKey', async (key: string, conn: Connection) => {
+        await RedisEditorProvider.open(key, conn, context.extensionUri);
     }));
 
     context.subscriptions.push(vscode.commands.registerCommand('dbbase.runQuery', async () => {
@@ -80,7 +92,7 @@ export function activate(context: vscode.ExtensionContext) {
             return;
         }
 
-        const sql = getQueryAtCursor(editor);
+        const sql = getQueryAtCursor(editor, activeConnection.type);
         if (!sql) {
             return;
         }
