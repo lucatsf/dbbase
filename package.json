@@ -4,7 +4,7 @@
   "description": "Professional SQL client with DBeaver/DataGrip fluidity. High-performance grid, native MCP for AI context (Copilot/Claude), and advanced exports for Postgres & MySQL.",
   "publisher": "DBbase",
   "icon": "resources/icon.png",
-  "version": "1.0.0",
+  "version": "1.0.1",
   "engines": {
     "vscode": "^1.109.0"
   },
