@@ -22,18 +22,21 @@ export class RedisDriver extends BaseDriver {
         if (!this.client) { throw new Error('Redis not connected'); }
         const start = Date.now();
         
-        // Remove comentários e linhas vazias
-        const lines = command.split('\n')
+        // Remove comentários e linhas vazias, preservando o conteúdo para formar o comando
+        const cleanLines = command.split('\n')
             .map(line => line.trim())
             .filter(line => line.length > 0 && !line.startsWith('--') && !line.startsWith('#'));
 
-        if (lines.length === 0) {
+        if (cleanLines.length === 0) {
             return { rows: [], executionTime: 0 };
         }
 
-        // Pegamos apenas o primeiro comando válido encontrado se houver múltiplos
-        const currentCommand = lines[0];
-        const parts = currentCommand.split(/\s+/);
+        // Unificamos as linhas em um único comando (padrão Redis CLI para blocos de texto)
+        const fullCommand = cleanLines.join(' ');
+        
+        // Parsing básico de argumentos respeitando aspas (opcional, mas proativo)
+        // Para simplicidade agora, mantemos o split por espaço:
+        const parts = fullCommand.split(/\s+/);
         const cmdName = parts[0].toLowerCase();
         const args = parts.slice(1);
         

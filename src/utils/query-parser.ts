@@ -7,30 +7,39 @@ export function getQueryAtCursor(editor: vscode.TextEditor, type: 'postgres' | '
     }
 
     const doc = editor.document;
-    const cursorOffset = doc.offsetAt(selection.active);
-    const text = doc.getText();
+    const cursorLine = selection.active.line;
 
-    // Redis é tipicamente orientado a linha única por comando
-    if (type === 'redis') {
-        const lineText = doc.lineAt(selection.active.line).text.trim();
-        // Se a linha for um comentário, ignoramos e não retornamos nada para o driver
-        if (lineText.startsWith('--') || lineText.startsWith('#')) return '';
-        return lineText;
+    // 1. Verificar se a linha atual é um comentário (ignoramos para não executar lixo)
+    const lineText = doc.lineAt(cursorLine).text.trim();
+    if (lineText.startsWith('--') || lineText.startsWith('#')) {
+        return '';
     }
 
-    // Lógica padrão de SQL (Blocos por ponto-e-vírgula)
-    const statements = text.split(';');
-    let currentOffset = 0;
-    
-    for (let statement of statements) {
-        const start = currentOffset;
-        const end = currentOffset + statement.length;
-        
-        if (cursorOffset >= start && cursorOffset <= end + 1) {
-            return statement.trim();
+    // 2. Lógica de Detecção de Bloco Inteligente
+    // Subimos até encontrar uma linha vazia ou uma linha que termina com ponto-e-vírgula (bloco anterior)
+    let startLine = cursorLine;
+    while (startLine > 0) {
+        const prevLine = doc.lineAt(startLine - 1).text.trim();
+        if (prevLine === '' || prevLine.endsWith(';')) {
+            break;
         }
-        currentOffset = end + 1;
+        startLine--;
     }
 
-    return '';
+    // Descemos até encontrar uma linha vazia ou uma linha que termina com ponto-e-vírgula (fim do bloco atual)
+    let endLine = cursorLine;
+    while (endLine < doc.lineCount - 1) {
+        const currentLine = doc.lineAt(endLine).text.trim();
+        if (currentLine === '' || currentLine.endsWith(';')) {
+            break;
+        }
+        endLine++;
+    }
+
+    const range = new vscode.Range(
+        new vscode.Position(startLine, 0),
+        doc.lineAt(endLine).range.end
+    );
+
+    return doc.getText(range).trim();
 }
