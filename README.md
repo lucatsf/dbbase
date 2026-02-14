@@ -40,7 +40,12 @@
 - **Semantic Metadata:** Automatically shares table comments and constraints with your AI for smarter query generation.
 - **One-Click Setup:** Automatically configures Claude Desktop for you.
 
-### 📥 Enterprise Data Export
+### � Key-Value Explorer (Redis)
+- **Native Key Browsing:** Explore keys with folder-like organization (using `:` as separator).
+- **DataType Support:** Native viewers for Strings, Hashes, Lists, Sets, and Sorted Sets.
+- **Direct Editing:** Update values or add fields to Hashes directly in the UI.
+
+### �📥 Enterprise Data Export
 
 Export your query results into multiple professional formats:
 
@@ -52,7 +57,7 @@ Export your query results into multiple professional formats:
 
 ### 🛠️ Built for Performance
 
-- **Modular Architecture:** Isolated database drivers (Postgres & MySQL).
+- **Modular Architecture:** Isolated database drivers (Postgres, MySQL & Redis).
 - **Security First:** Uses VS Code's `SecretStorage` for sensitive credentials.
 - **Safe Execution:** Automatic protection against accidental data modification.
 
@@ -60,6 +65,7 @@ Export your query results into multiple professional formats:
 
 - ✅ **PostgreSQL**
 - ✅ **MySQL / MariaDB**
+- ✅ **Redis** (Key-Value Explorer & Editor)
 - ⏳ *SQLite (Coming Soon)*
 - ⏳ *SQL Server (Coming Soon)*
 
