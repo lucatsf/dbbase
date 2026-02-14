@@ -1,7 +1,9 @@
 import * as vscode from 'vscode';
+import * as path from 'path';
 import { Connection } from '../types';
 import { DriverFactory } from '../database';
 import { RedisDriver } from '../database/redis';
+import { QueryManager } from '../utils/query-manager';
 
 export class ConnectionsProvider implements vscode.TreeDataProvider<vscode.TreeItem> {
     private _onDidChangeTreeData = new vscode.EventEmitter<vscode.TreeItem | undefined>();
@@ -43,23 +45,35 @@ export class ConnectionsProvider implements vscode.TreeDataProvider<vscode.TreeI
         }
 
         if (element instanceof ConnectionItem) {
-            if (element.info.type === 'redis') {
-                return this.getRedisChildren(element.info);
+            return [
+                new QueriesFolderItem(element.info),
+                new TablesFolderItem(element.info)
+            ];
+        }
+
+        if (element instanceof QueriesFolderItem) {
+            const files = await QueryManager.getQueryFiles(this.context, element.connection.id);
+            return files.map(file => new QueryFileItem(file, element.connection));
+        }
+
+        if (element instanceof TablesFolderItem) {
+            if (element.connection.type === 'redis') {
+                return this.getRedisChildren(element.connection);
             }
             try {
-                const driver = DriverFactory.create(element.info);
+                const driver = DriverFactory.create(element.connection);
                 await driver.connect();
                 const tables = await driver.getTables();
                 await driver.disconnect();
 
-                if (this.connectionStatuses.get(element.info.id) !== 'online') {
-                    this.connectionStatuses.set(element.info.id, 'online');
+                if (this.connectionStatuses.get(element.connection.id) !== 'online') {
+                    this.connectionStatuses.set(element.connection.id, 'online');
                     this.refresh();
                 }
-                return tables.map(table => new TableItem(table, element.info));
+                return tables.map(table => new TableItem(table, element.connection));
             } catch (err: any) {
-                if (this.connectionStatuses.get(element.info.id) !== 'offline') {
-                    this.connectionStatuses.set(element.info.id, 'offline');
+                if (this.connectionStatuses.get(element.connection.id) !== 'offline') {
+                    this.connectionStatuses.set(element.connection.id, 'offline');
                     this.refresh();
                 }
                 vscode.window.showErrorMessage(`Erro ao carregar tabelas: ${err.message}`);
@@ -210,6 +224,35 @@ export class ConnectionItem extends vscode.TreeItem {
             command: 'dbbase.selectConnection', 
             title: 'Selecionar', 
             arguments: [info] 
+        };
+    }
+}
+
+export class QueriesFolderItem extends vscode.TreeItem {
+    constructor(public readonly connection: Connection) {
+        super('Scratches & Queries', vscode.TreeItemCollapsibleState.Collapsed);
+        this.iconPath = new vscode.ThemeIcon('folder-library');
+        this.contextValue = 'queries-folder';
+    }
+}
+
+export class TablesFolderItem extends vscode.TreeItem {
+    constructor(public readonly connection: Connection) {
+        super(connection.type === 'redis' ? 'Keys' : 'Tables', vscode.TreeItemCollapsibleState.Collapsed);
+        this.iconPath = new vscode.ThemeIcon('database');
+        this.contextValue = 'tables-folder';
+    }
+}
+
+export class QueryFileItem extends vscode.TreeItem {
+    constructor(public readonly filePath: string, public readonly connection: Connection) {
+        super(path.basename(filePath), vscode.TreeItemCollapsibleState.None);
+        this.iconPath = new vscode.ThemeIcon('file-code');
+        this.contextValue = 'query-file';
+        this.command = {
+            command: 'dbbase.openQueryFile',
+            title: 'Abrir Query',
+            arguments: [filePath, connection]
         };
     }
 }

@@ -77,6 +77,25 @@
         "title": "DBBase: Abrir Chave Redis"
       },
       {
+        "command": "dbbase.newQuery",
+        "title": "DBBase: Nova Query",
+        "icon": "$(add)"
+      },
+      {
+        "command": "dbbase.openQueryFile",
+        "title": "DBBase: Abrir Arquivo de Query"
+      },
+      {
+        "command": "dbbase.deleteQuery",
+        "title": "DBBase: Excluir Query",
+        "icon": "$(trash)"
+      },
+      {
+        "command": "dbbase.renameQuery",
+        "title": "DBBase: Renomear Query",
+        "icon": "$(edit)"
+      },
+      {
         "command": "dbbase.openQueryEditor",
         "title": "DBBase: Nova Aba de Query",
         "icon": "$(add)"
@@ -129,6 +148,21 @@
         }
       ],
       "view/item/context": [
+        {
+          "command": "dbbase.newQuery",
+          "when": "view == dbbase-connections && viewItem == queries-folder",
+          "group": "inline"
+        },
+        {
+          "command": "dbbase.deleteQuery",
+          "when": "view == dbbase-connections && viewItem == query-file",
+          "group": "inline"
+        },
+        {
+          "command": "dbbase.renameQuery",
+          "when": "view == dbbase-connections && viewItem == query-file",
+          "group": "inline"
+        },
         {
           "command": "dbbase.editConnection",
           "when": "view == dbbase-connections && viewItem =~ /connection/",

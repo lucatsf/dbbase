@@ -2,12 +2,13 @@ import * as vscode from 'vscode';
 import * as path from 'path';
 import * as fs from 'fs';
 import * as os from 'os';
-import { ConnectionsProvider } from './providers/connections';
+import { ConnectionsProvider, QueryFileItem } from './providers/connections';
 import { ResultsViewProvider } from './providers/results';
 import { RedisEditorProvider } from './providers/redis-editor';
 import { DriverFactory } from './database';
 import { Connection } from './types';
 import { getQueryAtCursor } from './utils/query-parser';
+import { QueryManager } from './utils/query-manager';
 
 let activeConnection: Connection | undefined = undefined;
 let statusBarItem: vscode.StatusBarItem;
@@ -40,6 +41,21 @@ export function activate(context: vscode.ExtensionContext) {
         }
     };
 
+    // Auto-associação de conexão ao mudar de arquivo
+    context.subscriptions.push(vscode.window.onDidChangeActiveTextEditor(editor => {
+        if (editor) {
+            const connectionId = QueryManager.getConnectionIdFromUri(context, editor.document.uri);
+            if (connectionId) {
+                const conns = context.globalState.get<Connection[]>('connections', []);
+                const conn = conns.find(c => c.id === connectionId);
+                if (conn && conn.id !== activeConnection?.id) {
+                    activeConnection = conn;
+                    updateStatusBar();
+                }
+            }
+        }
+    }));
+
     // 3. Commands
     context.subscriptions.push(vscode.commands.registerCommand('dbbase.selectConnection', async (conn: Connection) => {
         activeConnection = conn;
@@ -62,19 +78,58 @@ export function activate(context: vscode.ExtensionContext) {
 
         vscode.window.showInformationMessage(`Banco Ativo: ${conn.label}`);
         
-        // Abre editor SQL automaticamente com conteúdo inicial condicional ao tipo
-        let initialContent = `-- DBBase Editor - ${conn.label}\n`;
-        if (conn.type === 'redis') {
-            initialContent += `GET key_name\n# INFO\n# KEYS *`;
-        } else {
-            initialContent += `SELECT * FROM users;`;
-        }
-
-        const doc = await vscode.workspace.openTextDocument({ 
-            language: 'sql', 
-            content: initialContent
-        });
+        // Em vez de abrir um arquivo temporário, criamos/abrimos um scratch file
+        const filePath = await QueryManager.createNewQuery(context, conn);
+        const doc = await vscode.workspace.openTextDocument(filePath);
         await vscode.window.showTextDocument(doc, vscode.ViewColumn.One);
+        connectionsProvider.refresh();
+    }));
+
+    context.subscriptions.push(vscode.commands.registerCommand('dbbase.openQueryFile', async (filePath: string, conn: Connection) => {
+        activeConnection = conn;
+        updateStatusBar();
+        const doc = await vscode.workspace.openTextDocument(filePath);
+        await vscode.window.showTextDocument(doc, vscode.ViewColumn.One);
+    }));
+
+    context.subscriptions.push(vscode.commands.registerCommand('dbbase.newQuery', async (node: any) => {
+        const conn = node?.connection || activeConnection;
+        if (!conn) {
+            vscode.window.showErrorMessage("Selecione uma conexão primeiro.");
+            return;
+        }
+        const filePath = await QueryManager.createNewQuery(context, conn);
+        const doc = await vscode.workspace.openTextDocument(filePath);
+        await vscode.window.showTextDocument(doc, vscode.ViewColumn.One);
+        connectionsProvider.refresh();
+    }));
+
+    context.subscriptions.push(vscode.commands.registerCommand('dbbase.deleteQuery', async (node: QueryFileItem) => {
+        const confirm = await vscode.window.showWarningMessage(`Excluir query "${path.basename(node.filePath)}"?`, { modal: true }, 'Sim');
+        if (confirm === 'Sim') {
+            try {
+                fs.unlinkSync(node.filePath);
+                connectionsProvider.refresh();
+            } catch (err: any) {
+                vscode.window.showErrorMessage(`Erro ao excluir arquivo: ${err.message}`);
+            }
+        }
+    }));
+
+    context.subscriptions.push(vscode.commands.registerCommand('dbbase.renameQuery', async (node: QueryFileItem) => {
+        const newName = await vscode.window.showInputBox({ 
+            prompt: 'Novo nome da query', 
+            value: path.basename(node.filePath) 
+        });
+        if (newName && newName !== path.basename(node.filePath)) {
+            const newPath = path.join(path.dirname(node.filePath), newName.endsWith('.sql') ? newName : `${newName}.sql`);
+            try {
+                fs.renameSync(node.filePath, newPath);
+                connectionsProvider.refresh();
+            } catch (err: any) {
+                vscode.window.showErrorMessage(`Erro ao renomear arquivo: ${err.message}`);
+            }
+        }
     }));
 
     context.subscriptions.push(vscode.commands.registerCommand('dbbase.openRedisKey', async (key: string, conn: Connection) => {
