@@ -5,6 +5,7 @@ import * as os from 'os';
 import { ConnectionsProvider, QueryFileItem } from './providers/connections';
 import { ResultsViewProvider } from './providers/results';
 import { RedisEditorProvider } from './providers/redis-editor';
+import { TableDataEditor } from './providers/table-editor';
 import { DriverFactory } from './database';
 import { Connection } from './types';
 import { getQueryAtCursor } from './utils/query-parser';
@@ -206,15 +207,8 @@ export function activate(context: vscode.ExtensionContext) {
         activeConnection = conn;
         updateStatusBar();
         
-        const sql = `SELECT * FROM ${activeConnection.type === 'mysql' ? `\`${tableName}\`` : `"${tableName}"`} LIMIT 50;`;
-        const doc = await vscode.workspace.openTextDocument({ 
-            language: 'sql', 
-            content: `-- DBBase: ${tableName}\n${sql}\n` 
-        });
-        await vscode.window.showTextDocument(doc, vscode.ViewColumn.One);
-        
-        // Opcional: Executar automaticamente a query
-        vscode.commands.executeCommand('dbbase.runQuery');
+        // Abre o visualizador de dados da tabela diretamente (estilo DataGrip)
+        await TableDataEditor.open(tableName, conn, context.extensionUri);
     }));
 
     // Comandos da Sidebar

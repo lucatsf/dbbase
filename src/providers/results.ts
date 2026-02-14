@@ -128,8 +128,13 @@ export class ResultsViewProvider implements vscode.WebviewViewProvider {
             // Identificar chave primária (simplificado: assume 'id' ou primeira coluna)
             const pkColumn = Object.keys(data.rowData).find(k => k.toLowerCase() === 'id') || Object.keys(data.rowData)[0];
             const pkValue = data.rowData[pkColumn];
+            const quote = this._lastConnection.type === 'mysql' ? '`' : '"';
+            
+            // Placeholder dinâmico (MySQL: ?, Postgres: $n)
+            const p1 = this._lastConnection.type === 'mysql' ? '?' : '$1';
+            const p2 = this._lastConnection.type === 'mysql' ? '?' : '$2';
 
-            const updateQuery = `UPDATE "${this.getTableName(this._lastQuery!)}" SET "${data.column}" = $1 WHERE "${pkColumn}" = $2`;
+            const updateQuery = `UPDATE ${quote}${this.getTableName(this._lastQuery!)}${quote} SET ${quote}${data.column}${quote} = ${p1} WHERE ${quote}${pkColumn}${quote} = ${p2}`;
             
             await driver.connect();
             await driver.query(updateQuery, [data.value, pkValue]);
