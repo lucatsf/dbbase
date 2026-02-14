@@ -9,6 +9,7 @@ export class ConnectionsProvider implements vscode.TreeDataProvider<vscode.TreeI
     private _onDidChangeTreeData = new vscode.EventEmitter<vscode.TreeItem | undefined>();
     readonly onDidChangeTreeData = this._onDidChangeTreeData.event;
     private connectionStatuses: Map<string, 'online' | 'offline' | 'unknown'> = new Map();
+    private forceCollapseIds: Set<string> = new Set();
 
     constructor(private context: vscode.ExtensionContext) {}
 
@@ -16,22 +17,43 @@ export class ConnectionsProvider implements vscode.TreeDataProvider<vscode.TreeI
         this._onDidChangeTreeData.fire(undefined);
     }
 
+    public setConnectionStatus(connectionId: string, status: 'online' | 'offline' | 'unknown') {
+        if (this.connectionStatuses.get(connectionId) !== status) {
+            this.connectionStatuses.set(connectionId, status);
+            this.refresh();
+        }
+    }
+
     async testConnection(conn: Connection): Promise<boolean> {
         try {
             const driver = DriverFactory.create(conn);
             await driver.connect();
             await driver.disconnect();
-            this.connectionStatuses.set(conn.id, 'online');
-            this.refresh();
+            
+            // Só damos refresh se o status realmente mudar, evitando loops
+            if (this.connectionStatuses.get(conn.id) !== 'online') {
+                this.connectionStatuses.set(conn.id, 'online');
+                this.refresh();
+            }
             return true;
         } catch (err) {
-            this.connectionStatuses.set(conn.id, 'offline');
-            this.refresh();
+            if (this.connectionStatuses.get(conn.id) !== 'offline') {
+                this.connectionStatuses.set(conn.id, 'offline');
+                this.refresh();
+            }
             return false;
         }
     }
 
     getTreeItem(element: vscode.TreeItem): vscode.TreeItem {
+        if (element instanceof ConnectionItem) {
+            const isForced = this.forceCollapseIds.has(element.info.id);
+            if (isForced) {
+                // Altera o ID apenas nesta renderização para forçar o colapso
+                (element as any).id = `${element.info.id}-collapsed-${Date.now()}`;
+                this.forceCollapseIds.delete(element.info.id);
+            }
+        }
         return element;
     }
 
@@ -40,11 +62,25 @@ export class ConnectionsProvider implements vscode.TreeDataProvider<vscode.TreeI
             const conns = this.context.globalState.get<Connection[]>('connections', []);
             return conns.map(c => {
                 const status = this.connectionStatuses.get(c.id) || 'unknown';
-                return new ConnectionItem(c, status);
+                const item = new ConnectionItem(c, status);
+                
+                // Se o banco já estiver online, mantemos ele expandido para evitar
+                // que o refresh() do VS Code feche o chevron durante a navegação.
+                if (status === 'online') {
+                    item.collapsibleState = vscode.TreeItemCollapsibleState.Expanded;
+                }
+                
+                return item;
             });
         }
 
         if (element instanceof ConnectionItem) {
+            // Sempre que o banco é expandido (pelo clique ou chevron), 
+            // tentamos conectar se não estiver online.
+            if (this.connectionStatuses.get(element.info.id) !== 'online') {
+                this.testConnection(element.info);
+            }
+
             return [
                 new QueriesFolderItem(element.info),
                 new TablesFolderItem(element.info)
@@ -57,6 +93,9 @@ export class ConnectionsProvider implements vscode.TreeDataProvider<vscode.TreeI
         }
 
         if (element instanceof TablesFolderItem) {
+            // Removido bloqueio de status 'offline' aqui. 
+            // Se o usuário expandir a pasta, permitimos que o driver tente a conexão.
+
             if (element.connection.type === 'redis') {
                 return this.getRedisChildren(element.connection);
             }
@@ -171,6 +210,13 @@ export class ConnectionsProvider implements vscode.TreeDataProvider<vscode.TreeI
         }
     }
 
+    async disconnectConnection(node: ConnectionItem) {
+        this.forceCollapseIds.add(node.info.id);
+        this.connectionStatuses.set(node.info.id, 'offline');
+        this.refresh();
+        vscode.window.showInformationMessage(`Conexão "${node.info.label}" encerrada.`);
+    }
+
     private async promptForConnection(existing?: Connection): Promise<Connection | undefined> {
         const type = await vscode.window.showQuickPick(['postgres', 'mysql', 'redis'], { placeHolder: 'Selecione o Tipo' });
         if (!type) { return; }
@@ -208,6 +254,7 @@ export class ConnectionItem extends vscode.TreeItem {
     ) {
         super(info.label, vscode.TreeItemCollapsibleState.Collapsed);
         
+        this.id = info.id;
         this.description = info.type;
         
         // Estilo Pro: Muda a cor do ícone principal conforme o status (Minimalista)
@@ -231,6 +278,7 @@ export class ConnectionItem extends vscode.TreeItem {
 export class QueriesFolderItem extends vscode.TreeItem {
     constructor(public readonly connection: Connection) {
         super('Scratches & Queries', vscode.TreeItemCollapsibleState.Collapsed);
+        this.id = `${connection.id}-queries`;
         this.iconPath = new vscode.ThemeIcon('folder-library');
         this.contextValue = 'queries-folder';
     }
@@ -239,6 +287,7 @@ export class QueriesFolderItem extends vscode.TreeItem {
 export class TablesFolderItem extends vscode.TreeItem {
     constructor(public readonly connection: Connection) {
         super(connection.type === 'redis' ? 'Keys' : 'Tables', vscode.TreeItemCollapsibleState.Collapsed);
+        this.id = `${connection.id}-tables`;
         this.iconPath = new vscode.ThemeIcon('database');
         this.contextValue = 'tables-folder';
     }

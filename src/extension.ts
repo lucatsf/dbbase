@@ -20,7 +20,10 @@ export function activate(context: vscode.ExtensionContext) {
 
     // 1. Providers
     const connectionsProvider = new ConnectionsProvider(context);
-    vscode.window.registerTreeDataProvider('dbbase-connections', connectionsProvider);
+    const connectionsView = vscode.window.createTreeView('dbbase-connections', {
+        treeDataProvider: connectionsProvider,
+        showCollapseAll: true
+    });
 
     resultsProvider = new ResultsViewProvider(context.extensionUri);
     context.subscriptions.push(
@@ -37,6 +40,9 @@ export function activate(context: vscode.ExtensionContext) {
             statusBarItem.text = `$(database) DB: ${activeConnection.label} (${activeConnection.type})`;
             statusBarItem.tooltip = `Conectado a ${activeConnection.host}:${activeConnection.port}`;
             statusBarItem.show();
+            
+            // Força o status para 'online' na TreeView caso não esteja
+            connectionsProvider.setConnectionStatus(activeConnection.id, 'online');
         } else {
             statusBarItem.hide();
         }
@@ -167,6 +173,9 @@ export function activate(context: vscode.ExtensionContext) {
             const driver = DriverFactory.create(activeConnection);
             await driver.connect();
             
+            // Garante que o botão de desconectar apareça após uma query bem sucedida
+            connectionsProvider.setConnectionStatus(activeConnection.id, 'online');
+
             const startTime = Date.now();
             const result = await driver.query(sql);
             const executionTime = Date.now() - startTime;
@@ -215,7 +224,19 @@ export function activate(context: vscode.ExtensionContext) {
     context.subscriptions.push(vscode.commands.registerCommand('dbbase.addConnection', () => connectionsProvider.addConnection()));
     context.subscriptions.push(vscode.commands.registerCommand('dbbase.editConnection', (node) => connectionsProvider.editConnection(node)));
     context.subscriptions.push(vscode.commands.registerCommand('dbbase.deleteConnection', (node) => connectionsProvider.deleteConnection(node)));
+    context.subscriptions.push(vscode.commands.registerCommand('dbbase.disconnectConnection', (node) => {
+        if (activeConnection && activeConnection.id === node.info.id) {
+            activeConnection = undefined;
+            statusBarItem.hide();
+        }
+        connectionsProvider.disconnectConnection(node);
+    }));
     context.subscriptions.push(vscode.commands.registerCommand('dbbase.refreshConnections', () => connectionsProvider.refresh()));
+
+    // Comando interno para sincronizar status entre diferentes views
+    context.subscriptions.push(vscode.commands.registerCommand('dbbase.internal.setStatus', (id: string, status: any) => {
+        connectionsProvider.setConnectionStatus(id, status);
+    }));
 
     // Configuração Automática do MCP para Claude Desktop
     context.subscriptions.push(vscode.commands.registerCommand('dbbase.setupMCP', async () => {

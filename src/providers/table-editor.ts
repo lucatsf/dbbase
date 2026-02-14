@@ -26,6 +26,10 @@ export class TableDataEditor {
             try {
                 const driver = DriverFactory.create(connection);
                 await driver.connect();
+                
+                // Dispara evento para mostrar o botão de desconectar na Sidebar
+                vscode.commands.executeCommand('dbbase.internal.setStatus', connection.id, 'online');
+
                 // Usamos aspas dependendo do tipo de banco
                 const quote = connection.type === 'mysql' ? '`' : '"';
                 const sql = `SELECT * FROM ${quote}${tableName}${quote} LIMIT 1000;`;
