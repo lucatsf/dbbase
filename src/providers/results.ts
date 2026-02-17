@@ -46,7 +46,7 @@ export class ResultsViewProvider implements vscode.WebviewViewProvider {
 
     private async handleExport(format: string, data: any[]) {
         if (!data || data.length === 0) {
-            vscode.window.showWarningMessage('Não há dados para exportar.');
+            vscode.window.showWarningMessage('No data available to export.');
             return;
         }
 
@@ -92,11 +92,11 @@ export class ResultsViewProvider implements vscode.WebviewViewProvider {
             }
 
             fs.writeFileSync(uri.fsPath, content);
-            vscode.window.showInformationMessage(`Dados exportados com sucesso para: ${path.basename(uri.fsPath)}`);
+            vscode.window.showInformationMessage(`Data successfully exported to: ${path.basename(uri.fsPath)}`);
             
             // Pergunta se quer abrir o arquivo
-            const openAction = 'Abrir Arquivo';
-            vscode.window.showInformationMessage('Exportação concluída!', openAction).then(selection => {
+            const openAction = 'Open File';
+            vscode.window.showInformationMessage('Export completed!', openAction).then(selection => {
                 if (selection === openAction) {
                     vscode.workspace.openTextDocument(uri).then(doc => vscode.window.showTextDocument(doc));
                 }

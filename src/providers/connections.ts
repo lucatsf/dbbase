@@ -109,15 +109,27 @@ export class ConnectionsProvider implements vscode.TreeDataProvider<vscode.TreeI
                     this.connectionStatuses.set(element.connection.id, 'online');
                     this.refresh();
                 }
+
+                const config = vscode.workspace.getConfiguration('dbbase');
+                const groupByPrefix = config.get<boolean>('groupTablesByPrefix', true);
+
+                if (groupByPrefix) {
+                    return this.groupTables(tables, element.connection);
+                }
+
                 return tables.map(table => new TableItem(table, element.connection));
             } catch (err: any) {
                 if (this.connectionStatuses.get(element.connection.id) !== 'offline') {
                     this.connectionStatuses.set(element.connection.id, 'offline');
                     this.refresh();
                 }
-                vscode.window.showErrorMessage(`Erro ao carregar tabelas: ${err.message}`);
+                vscode.window.showErrorMessage(`Error loading tables: ${err.message}`);
                 return [];
             }
+        }
+
+        if (element instanceof TableGroupItem) {
+            return element.tables.map(table => new TableItem(table, element.connection));
         }
 
         if (element instanceof RedisFolderItem) {
@@ -125,6 +137,46 @@ export class ConnectionsProvider implements vscode.TreeDataProvider<vscode.TreeI
         }
 
         return [];
+    }
+
+    private groupTables(tables: string[], connection: Connection): vscode.TreeItem[] {
+        const groups = new Map<string, string[]>();
+        const soloTables: string[] = [];
+
+        for (const table of tables) {
+            const parts = table.split('_');
+            if (parts.length > 1) {
+                const prefix = parts[0];
+                if (!groups.has(prefix)) {
+                    groups.set(prefix, []);
+                }
+                groups.get(prefix)!.push(table);
+            } else {
+                soloTables.push(table);
+            }
+        }
+
+        const items: vscode.TreeItem[] = [];
+
+        // Add groups that have more than 1 table
+        for (const [prefix, groupedTables] of groups) {
+            if (groupedTables.length > 1) {
+                items.push(new TableGroupItem(prefix, groupedTables, connection));
+            } else {
+                soloTables.push(groupedTables[0]);
+            }
+        }
+
+        // Add solo tables
+        soloTables.forEach(table => {
+            items.push(new TableItem(table, connection));
+        });
+
+        return items.sort((a, b) => {
+            if (a instanceof TableGroupItem && b instanceof TableItem) return -1;
+            if (a instanceof TableItem && b instanceof TableGroupItem) return 1;
+            return (a.label as string).localeCompare(b.label as string);
+        });
     }
 
     private async getRedisChildren(connection: Connection, prefix: string = ''): Promise<vscode.TreeItem[]> {
@@ -169,7 +221,7 @@ export class ConnectionsProvider implements vscode.TreeDataProvider<vscode.TreeI
             });
 
         } catch (err: any) {
-            vscode.window.showErrorMessage(`Erro Redis: ${err.message}`);
+            vscode.window.showErrorMessage(`Redis Error: ${err.message}`);
             return [];
         }
     }
@@ -189,7 +241,7 @@ export class ConnectionsProvider implements vscode.TreeDataProvider<vscode.TreeI
         const conn = await this.promptForConnection();
         if (conn) {
             this.saveConnection(conn);
-            vscode.window.showInformationMessage(`Conexão "${conn.label}" criada.`);
+            vscode.window.showInformationMessage(`Connection "${conn.label}" created.`);
         }
     }
 
@@ -201,8 +253,8 @@ export class ConnectionsProvider implements vscode.TreeDataProvider<vscode.TreeI
     }
 
     async deleteConnection(node: ConnectionItem) {
-        const confirm = await vscode.window.showWarningMessage(`Excluir "${node.info.label}"?`, { modal: true }, 'Sim');
-        if (confirm === 'Sim') {
+        const confirm = await vscode.window.showWarningMessage(`Delete "${node.info.label}"?`, { modal: true }, 'Yes');
+        if (confirm === 'Yes') {
             let conns = this.context.globalState.get<Connection[]>('connections', []);
             conns = conns.filter(c => c.id !== node.info.id);
             this.context.globalState.update('connections', conns);
@@ -214,22 +266,22 @@ export class ConnectionsProvider implements vscode.TreeDataProvider<vscode.TreeI
         this.forceCollapseIds.add(node.info.id);
         this.connectionStatuses.set(node.info.id, 'offline');
         this.refresh();
-        vscode.window.showInformationMessage(`Conexão "${node.info.label}" encerrada.`);
+        vscode.window.showInformationMessage(`Connection "${node.info.label}" closed.`);
     }
 
     private async promptForConnection(existing?: Connection): Promise<Connection | undefined> {
-        const type = await vscode.window.showQuickPick(['postgres', 'mysql', 'redis'], { placeHolder: 'Selecione o Tipo' });
+        const type = await vscode.window.showQuickPick(['postgres', 'mysql', 'redis'], { placeHolder: 'Select Connection Type' });
         if (!type) { return; }
 
-        const label = await vscode.window.showInputBox({ placeHolder: 'Nome da Conexão', value: existing?.label || 'Meu Banco' });
-        const host = await vscode.window.showInputBox({ placeHolder: 'Host', value: existing?.host || '127.0.0.1' });
+        const label = await vscode.window.showInputBox({ prompt: 'Connection Name', placeHolder: 'Ex: My Database', value: existing?.label || 'My Database' });
+        const host = await vscode.window.showInputBox({ prompt: 'Host', placeHolder: 'Ex: 127.0.0.1', value: existing?.host || '127.0.0.1' });
         const defaultPort = type === 'postgres' ? '5432' : (type === 'mysql' ? '3306' : '6379');
-        const portInput = await vscode.window.showInputBox({ placeHolder: 'Porta', value: existing?.port?.toString() || defaultPort });
+        const portInput = await vscode.window.showInputBox({ prompt: 'Port', placeHolder: defaultPort, value: existing?.port?.toString() || defaultPort });
         const user = type !== 'redis' 
-            ? await vscode.window.showInputBox({ placeHolder: 'Usuário', value: existing?.user || (type === 'postgres' ? 'postgres' : 'root') })
+            ? await vscode.window.showInputBox({ prompt: 'User', placeHolder: type === 'postgres' ? 'postgres' : 'root', value: existing?.user || (type === 'postgres' ? 'postgres' : 'root') })
             : 'default';
-        const password = await vscode.window.showInputBox({ placeHolder: 'Senha', password: true, value: existing?.password });
-        const database = await vscode.window.showInputBox({ placeHolder: type === 'redis' ? 'Índice do Banco (0-15)' : 'Banco de Dados', value: existing?.database || '0' });
+        const password = await vscode.window.showInputBox({ prompt: 'Password', placeHolder: 'Password', password: true, value: existing?.password });
+        const database = await vscode.window.showInputBox({ prompt: type === 'redis' ? 'Database Index (0-15)' : 'Database Name', placeHolder: type === 'redis' ? '0' : 'postgres', value: existing?.database || '0' });
 
         if (label && host && portInput && user) {
             return {
@@ -269,7 +321,7 @@ export class ConnectionItem extends vscode.TreeItem {
         this.contextValue = `connection-${status}`;
         this.command = { 
             command: 'dbbase.selectConnection', 
-            title: 'Selecionar', 
+            title: 'Select', 
             arguments: [info] 
         };
     }
@@ -300,7 +352,7 @@ export class QueryFileItem extends vscode.TreeItem {
         this.contextValue = 'query-file';
         this.command = {
             command: 'dbbase.openQueryFile',
-            title: 'Abrir Query',
+            title: 'Open Query',
             arguments: [filePath, connection]
         };
     }
@@ -316,9 +368,22 @@ export class TableItem extends vscode.TreeItem {
         this.contextValue = 'table';
         this.command = {
             command: 'dbbase.openTable',
-            title: 'Abrir Tabela',
+            title: 'Open Table',
             arguments: [tableName, connection]
         };
+    }
+}
+
+export class TableGroupItem extends vscode.TreeItem {
+    constructor(
+        public readonly prefix: string,
+        public readonly tables: string[],
+        public readonly connection: Connection
+    ) {
+        super(prefix, vscode.TreeItemCollapsibleState.Collapsed);
+        this.iconPath = new vscode.ThemeIcon('folder');
+        this.contextValue = 'table-group';
+        this.description = `${tables.length} tables`;
     }
 }
 
@@ -346,7 +411,7 @@ export class RedisKeyItem extends vscode.TreeItem {
         this.description = 'redis';
         this.command = {
             command: 'dbbase.openRedisKey',
-            title: 'Abrir Chave',
+            title: 'Open Key',
             arguments: [key, connection]
         };
     }

@@ -38,7 +38,7 @@ export function activate(context: vscode.ExtensionContext) {
     const updateStatusBar = () => {
         if (activeConnection) {
             statusBarItem.text = `$(database) DB: ${activeConnection.label} (${activeConnection.type})`;
-            statusBarItem.tooltip = `Conectado a ${activeConnection.host}:${activeConnection.port}`;
+            statusBarItem.tooltip = `Connected to ${activeConnection.host}:${activeConnection.port}`;
             statusBarItem.show();
             
             // Força o status para 'online' na TreeView caso não esteja
@@ -83,7 +83,7 @@ export function activate(context: vscode.ExtensionContext) {
             console.error('[DBBASE] Erro ao salvar active_connection.json:', err);
         }
 
-        vscode.window.showInformationMessage(`Banco Ativo: ${conn.label}`);
+        vscode.window.showInformationMessage(`Active Database: ${conn.label}`);
         
         // Em vez de abrir um arquivo temporário, criamos/abrimos um scratch file
         const filePath = await QueryManager.createNewQuery(context, conn);
