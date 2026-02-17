@@ -41,7 +41,7 @@ export class RedisDriver extends BaseDriver {
         const args = parts.slice(1);
         
         if (typeof (this.client as any)[cmdName] !== 'function') {
-            throw new Error(`Comando Redis inválido ou não suportado: "${cmdName}"`);
+            throw new Error(`Invalid or unsupported Redis command: "${cmdName}"`);
         }
         
         const result = await (this.client as any)[cmdName](...args);
@@ -108,9 +108,9 @@ export class RedisDriver extends BaseDriver {
                 // Assume value is an object for hash
                 await this.client.hmset(key, value);
                 break;
-            // Outros tipos podem ser implementados conforme necessário
+            // Other types can be implemented as needed
             default:
-                throw new Error(`Edição para o tipo ${type} ainda não implementada.`);
+                throw new Error(`Editing for type ${type} is not yet implemented.`);
         }
     }
 }

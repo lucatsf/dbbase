@@ -58,7 +58,7 @@
       "dbbase-explorer": [
         {
           "id": "dbbase-connections",
-          "name": "Conexões",
+          "name": "Connections",
           "icon": "$(database)"
         }
       ],
@@ -66,76 +66,86 @@
         {
           "id": "dbbase.resultsView",
           "type": "webview",
-          "name": "Resultados",
+          "name": "Results",
           "icon": "$(table)"
         }
       ]
     },
+    "configuration": {
+      "title": "DBBase",
+      "properties": {
+        "dbbase.groupTablesByPrefix": {
+          "type": "boolean",
+          "default": true,
+          "description": "Group tables by their prefix (e.g., auth_user -> auth > user)."
+        }
+      }
+    },
     "commands": [
       {
         "command": "dbbase.openRedisKey",
-        "title": "DBBase: Abrir Chave Redis"
+        "title": "DBBase: Open Redis Key"
       },
       {
         "command": "dbbase.newQuery",
-        "title": "DBBase: Nova Query",
+        "title": "DBBase: New Query",
         "icon": "$(add)"
       },
       {
         "command": "dbbase.openQueryFile",
-        "title": "DBBase: Abrir Arquivo de Query"
+        "title": "DBBase: Open Query File"
       },
       {
         "command": "dbbase.deleteQuery",
-        "title": "DBBase: Excluir Query",
+        "title": "DBBase: Delete Query",
         "icon": "$(trash)"
       },
       {
         "command": "dbbase.renameQuery",
-        "title": "DBBase: Renomear Query",
+        "title": "DBBase: Rename Query",
         "icon": "$(edit)"
       },
       {
         "command": "dbbase.openQueryEditor",
-        "title": "DBBase: Nova Aba de Query",
+        "title": "DBBase: New Query Tab",
         "icon": "$(add)"
       },
       {
         "command": "dbbase.addConnection",
-        "title": "Adicionar Conexão",
+        "title": "Add Connection",
         "icon": "$(plus)"
       },
       {
         "command": "dbbase.deleteConnection",
-        "title": "Excluir Conexão",
+        "title": "Delete Connection",
         "icon": "$(trash)"
       },
       {
         "command": "dbbase.refreshConnections",
-        "title": "Atualizar Conexões",
+        "title": "Refresh Connections",
         "icon": "$(refresh)"
       },
       {
         "command": "dbbase.disconnectConnection",
-        "title": "Desconectar",
+        "title": "Disconnect",
         "icon": "$(debug-disconnect)"
       },
       {
         "command": "dbbase.editConnection",
-        "title": "Editar Conexão",
+        "title": "Edit Connection",
         "icon": "$(edit)"
       },
       {
         "command": "dbbase.runQuery",
-        "title": "DBBase: Executar Query"
+        "title": "DBBase: Run Query"
       },
       {
         "command": "dbbase.openTable",
-        "title": "DBBase: Abrir Tabela"
+        "title": "DBBase: Open Table"
       },
       {
         "command": "dbbase.setupMCP",
-        "title": "DBBase: Configurar Servidor MCP (Claude Desktop)",
+        "title": "DBBase: Setup MCP Server (Claude Desktop)",
         "icon": "$(settings-gear)"
       }
     ],

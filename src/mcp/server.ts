@@ -41,13 +41,13 @@ class DbBaseMcpServer {
     const configPath = process.env.DBBASE_MCP_CONFIG || path.join(process.cwd(), "active_connection.json");
     try {
       if (!fs.existsSync(configPath)) {
-        console.error(`[Aviso] Arquivo de configuração não encontrado em: ${configPath}`);
+        console.error(`[Warning] Configuration file not found at: ${configPath}`);
         return null;
       }
       const data = fs.readFileSync(configPath, "utf-8");
       return JSON.parse(data) as Connection;
     } catch (error) {
-      console.error(`[Erro] Falha ao carregar configuração: ${error}`);
+      console.error(`[Error] Failed to load configuration: ${error}`);
       return null;
     }
   }
@@ -75,7 +75,7 @@ class DbBaseMcpServer {
       tools: [
         {
           name: "get_schema",
-          description: "Retorna a estrutura completa do banco de dados (tabelas, colunas, tipos e comentários). Use esta ferramenta SEMPRE antes de gerar ou explicar queries para garantir que os nomes de tabelas e colunas existam.",
+          description: "Returns the complete database schema (tables, columns, types, and comments). ALWAYS use this tool before generating or explaining queries to ensure table and column names exist.",
           inputSchema: {
             type: "object",
             properties: {},
@@ -83,13 +83,13 @@ class DbBaseMcpServer {
         },
         {
           name: "run_read_query",
-          description: "Executa consultas SQL de leitura (SELECT). Possui limite automático de 100 linhas e gera erro se detectar comandos de escrita (INSERT/UPDATE/DELETE). Use para validar dados ou responder perguntas sobre o conteúdo das tabelas.",
+          description: "Executes SQL read queries (SELECT). Has an automatic 100-line limit and returns an error if write commands (INSERT/UPDATE/DELETE) are detected. Use to validate data or answer questions about table content.",
           inputSchema: {
             type: "object",
             properties: {
               sql: {
                 type: "string",
-                description: "Query SQL SELECT (ex: SELECT count(*) FROM orders)",
+                description: "SQL SELECT query (e.g., SELECT count(*) FROM orders)",
               },
             },
             required: ["sql"],
@@ -97,13 +97,13 @@ class DbBaseMcpServer {
         },
         {
           name: "inspect_table",
-          description: "Obtém detalhes profundos de uma tabela: PKs, FKs, índices e constraints. Use quando precisar entender os relacionamentos ou regras de integridade para queries complexas.",
+          description: "Gets deep details of a table: PKs, FKs, indexes, and constraints. Use when you need to understand relationships or integrity rules for complex queries.",
           inputSchema: {
             type: "object",
             properties: {
               tableName: {
                 type: "string",
-                description: "O nome exato da tabela a ser inspecionada",
+                description: "The exact name of the table to inspect",
               },
             },
             required: ["tableName"],
@@ -120,7 +120,7 @@ class DbBaseMcpServer {
         if (!config) {
           throw new McpError(
             ErrorCode.InternalError,
-            "Nenhuma configuração de conexão ativa encontrada. Ative uma conexão no DBBase primeiro."
+            "No active connection configuration found. Activate a connection in DBBase first."
           );
         }
 
@@ -158,12 +158,12 @@ class DbBaseMcpServer {
               if (!this.validateReadQuery(sql)) {
                 throw new McpError(
                   ErrorCode.InvalidParams,
-                  "Apenas queries de leitura (SELECT ou WITH) são permitidas."
+                  "Only read queries (SELECT or WITH) are allowed."
                 );
               }
 
               const finalSql = this.applyQueryLimit(sql);
-              console.error(`[Executando Query] ${finalSql}`);
+              console.error(`[Executing Query] ${finalSql}`);
               
               const result = await driver.query(finalSql);
               return {
@@ -179,7 +179,7 @@ class DbBaseMcpServer {
             case "inspect_table": {
               const tableName = String(args?.tableName || "");
               if (!tableName) {
-                throw new McpError(ErrorCode.InvalidParams, "Nome da tabela é obrigatório.");
+                throw new McpError(ErrorCode.InvalidParams, "Table name is required.");
               }
 
               const details = await driver.getTableDetails(tableName);
@@ -194,7 +194,7 @@ class DbBaseMcpServer {
             }
 
             default:
-              throw new McpError(ErrorCode.MethodNotFound, `Ferramenta desconhecida: ${name}`);
+              throw new McpError(ErrorCode.MethodNotFound, `Unknown tool: ${name}`);
           }
         } finally {
           await driver.disconnect().catch((err) => 
