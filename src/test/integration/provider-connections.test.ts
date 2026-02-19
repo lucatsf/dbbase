@@ -60,10 +60,16 @@ suite('Integration Test: ConnectionsProvider', () => {
         } as any);
 
         try {
-            const children = await provider.getChildren(); // Get roots
-            const tables = await provider.getChildren(children[0]);
+            const children = await provider.getChildren(); // Get roots (ConnectionItems)
+            const folders = await provider.getChildren(children[0]); // Returns [QueriesFolder, TablesFolder]
+            
+            // Find Tables folder (it's the second one or we can search by type)
+            const tablesFolder = folders.find(f => (f as any).label === 'Tables');
+            assert.ok(tablesFolder, 'Tables folder should exist');
+
+            const tables = await provider.getChildren(tablesFolder);
             assert.strictEqual(tables.length, 2);
-            assert.strictEqual(tables[0].label, 'users');
+            assert.strictEqual((tables[0] as any).label, 'orders');
         } finally {
             DriverFactory.create = originalCreate;
         }

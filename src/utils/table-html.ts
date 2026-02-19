@@ -1,5 +1,9 @@
 export function getTableHtml(data: any[]) {
-    if (!data.length) {
+    return getMultipleTablesHtml([{ rows: data, sql: '' }]);
+}
+
+export function getMultipleTablesHtml(results: { rows: any[], sql: string }[]) {
+    if (!results || results.length === 0 || (results.length === 1 && results[0].rows.length === 0)) {
         return `
             <body style="background:var(--vscode-editor-background);color:var(--vscode-disabledForeground);display:flex;justify-content:center;align-items:center;height:100vh;margin:0;font-family:sans-serif;">
                 <div style="text-align:center;">
@@ -9,7 +13,45 @@ export function getTableHtml(data: any[]) {
             </body>`;
     }
 
-    const headers = Object.keys(data[0]);
+    let tablesHtml = '';
+    results.forEach((res, idx) => {
+        const rows = res.rows;
+        const sql = res.sql;
+        const headers = rows.length ? Object.keys(rows[0]) : [];
+
+        tablesHtml += `
+            <div class="result-set" style="margin-bottom: 24px;">
+                ${sql ? `<div class="sql-header" style="padding: 6px 10px; background: var(--vscode-editor-inactiveSelectionBackground); font-family: var(--vscode-editor-font-family); font-size: 11px; border-left: 3px solid var(--vscode-button-background); margin-bottom: 4px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; opacity: 0.8;" title="${sql.replace(/"/g, '&quot;')}">${sql}</div>` : ''}
+                <div class="table-container" style="overflow-x: auto; max-width: 100vw; border-bottom: 1px solid var(--border);">
+                    <table>
+                        <thead>
+                            <tr>
+                                <th class="row-num">#</th>
+                                ${headers.map(h => `<th>${h}</th>`).join('')}
+                            </tr>
+                        </thead>
+                        <tbody>
+                            ${rows.map((row, i) => `
+                                <tr data-row='${JSON.stringify(row).replace(/'/g, "&apos;")}'>
+                                    <td class="row-num">${i + 1}</td>
+                                    ${headers.map(h => {
+                                        const val = row[h];
+                                        const displayVal = val === null ? 'NULL' : (typeof val === 'object' ? JSON.stringify(val) : val);
+                                        return `<td data-col="${h}">${displayVal}</td>`;
+                                    }).join('')}
+                                </tr>
+                            `).join('')}
+                        </tbody>
+                    </table>
+                </div>
+                <div class="info-text" style="padding: 4px 10px; font-size: 11px; opacity: 0.6; color: var(--vscode-descriptionForeground);">
+                    ${rows.length} linhas retornadas
+                </div>
+            </div>
+        `;
+    });
+
+    const lastResultData = results[results.length - 1].rows;
 
     return `<!DOCTYPE html>
     <html lang="en">
@@ -31,12 +73,11 @@ export function getTableHtml(data: any[]) {
                 font-family: var(--vscode-font-family, 'Segoe UI', sans-serif); 
                 margin: 0; 
                 padding: 0;
-                overflow: hidden;
             }
             .container {
                 display: flex;
                 flex-direction: column;
-                height: 100vh;
+                min-height: 100vh;
                 width: 100vw;
             }
             .toolbar {
@@ -48,14 +89,9 @@ export function getTableHtml(data: any[]) {
                 align-items: center;
                 gap: 2px;
                 height: 32px;
-            }
-            .info-text {
-                font-size: 11px;
-                color: var(--vscode-descriptionForeground);
-                margin-left: auto;
-                padding-right: 8px;
-                display: flex;
-                gap: 12px;
+                position: sticky;
+                top: 0;
+                z-index: 100;
             }
             .icon-btn {
                 background: transparent;
@@ -84,13 +120,7 @@ export function getTableHtml(data: any[]) {
             }
             .icon-btn.save { color: var(--vscode-charts-green); }
             .icon-btn.cancel { color: var(--vscode-charts-red); }
-            .icon-btn.refresh { color: var(--vscode-foreground); }
 
-            .table-container {
-                flex: 1;
-                overflow: auto;
-                position: relative;
-            }
             table { 
                 border-collapse: separate; 
                 border-spacing: 0;
@@ -115,7 +145,7 @@ export function getTableHtml(data: any[]) {
                 border-bottom: 1px solid var(--border); 
                 border-right: 1px solid var(--border);
                 white-space: nowrap;
-                max-width: 300px;
+                max-width: 400px;
                 overflow: hidden;
                 text-overflow: ellipsis;
                 cursor: cell;
@@ -146,7 +176,6 @@ export function getTableHtml(data: any[]) {
                 outline: none;
             }
 
-            /* Dropdown Menu */
             .export-dropdown {
                 position: relative;
                 display: inline-block;
@@ -195,56 +224,33 @@ export function getTableHtml(data: any[]) {
                 <div class="export-dropdown">
                     <button id="exportBtn" class="icon-btn" title="Exportar Dados">
                         <svg viewBox="0 0 16 16" xmlns="http://www.w3.org/2000/svg"><path fill-rule="evenodd" clip-rule="evenodd" d="M13.5 1h-11l-.5.5v13l.5.5h11l.5-.5v-13l-.5-.5zm-.5 13h-10V2h10v12zM4.5 9h7v1h-7V9zm7-2h-7v1h7V7zm-7-2h7v1h-7V5z"/></svg>
-                        <span style="font-size: 10px; margin-left: 4px;">Export</span>
+                        <span style="font-size: 10px; margin-left: 4px;">Export Last Query</span>
                     </button>
                     <div id="exportMenu" class="dropdown-content">
                         <a href="#" data-format="csv">CSV</a>
-                        <a href="#" data-format="json">JSON</a>
                         <a href="#" data-format="xlsx">Excel (XLSX)</a>
+                        <a href="#" data-format="json">JSON</a>
                         <a href="#" data-format="md">Markdown</a>
                         <a href="#" data-format="sql">SQL Inserts</a>
                     </div>
                 </div>
-                <div class="info-text">
-                    <span id="rowCount">${data.length} rows</span>
-                </div>
             </div>
-            <div class="table-container">
-                <table id="resultsTable">
-                    <thead>
-                        <tr>
-                            <th class="row-num">#</th>
-                            ${headers.map(h => `<th>${h}</th>`).join('')}
-                        </tr>
-                    </thead>
-                    <tbody>
-                        ${data.map((r, i) => `
-                            <tr data-row='${JSON.stringify(r).replace(/'/g, "&apos;")}'>
-                                <td class="row-num">${i + 1}</td>
-                                ${headers.map(h => {
-                                    const val = r[h];
-                                    const displayVal = val === null ? 'NULL' : (typeof val === 'object' ? JSON.stringify(val) : val);
-                                    return `<td data-col="${h}">${displayVal}</td>`;
-                                }).join('')}
-                            </tr>
-                        `).join('')}
-                    </tbody>
-                </table>
+            <div id="main-content" style="padding: 10px;">
+                ${tablesHtml}
             </div>
         </div>
 
         <script>
             const vscode = acquireVsCodeApi();
-            const table = document.getElementById('resultsTable');
+            let pendingChanges = [];
             const saveBtn = document.getElementById('saveBtn');
             const cancelBtn = document.getElementById('cancelBtn');
             const refreshBtn = document.getElementById('refreshBtn');
-            let pendingChanges = [];
 
-            table.addEventListener('dblclick', (e) => {
+            // Delegated double click for editing
+            document.addEventListener('dblclick', (e) => {
                 const td = e.target.closest('td');
                 if (!td || td.classList.contains('row-num')) return;
-
                 if (td.querySelector('input')) return;
 
                 const originalValue = td.innerText === 'NULL' ? '' : td.innerText;
@@ -320,14 +326,15 @@ export function getTableHtml(data: any[]) {
             cancelBtn.onclick = doCancel;
             refreshBtn.onclick = () => vscode.postMessage({ command: 'refresh' });
 
-            // Export logic
+            // Export logic - Exports the LAST result set
             document.querySelectorAll('.dropdown-content a').forEach(item => {
                 item.addEventListener('click', event => {
                     const format = event.target.getAttribute('data-format');
+                    const dataToExport = ${JSON.stringify(lastResultData)};
                     vscode.postMessage({ 
                         command: 'exportData', 
                         format: format,
-                        data: ${JSON.stringify(data)} 
+                        data: dataToExport 
                     });
                 });
             });

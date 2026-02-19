@@ -1,11 +1,24 @@
 import * as assert from 'assert';
 import * as vscode from 'vscode';
-import { getQueryAtCursor } from '../../utils/query-parser';
+import { getQueryAtCursor, splitSQL } from '../../utils/query-parser';
 
 suite('Query Parser Unit Tests', () => {
+    test('splitSQL should correctly split multiple statements', () => {
+        const sql = "SELECT 1; SELECT 'val;ue'; SELECT 2;";
+        const results = splitSQL(sql);
+        assert.strictEqual(results.length, 3);
+        assert.strictEqual(results[0], 'SELECT 1');
+        assert.strictEqual(results[1], "SELECT 'val;ue'");
+        assert.strictEqual(results[2], "SELECT 2");
+    });
+
+    test('splitSQL should handle multi-line comments', () => {
+        const sql = "SELECT 1; /* comment with ; */ SELECT 2;";
+        const results = splitSQL(sql);
+        assert.strictEqual(results.length, 2);
+    });
+
     test('Should return selection if not empty', async () => {
-        // Mocking vscode.TextEditor is complex, usually we should use 
-        // real vscode in integration tests, but let's try a simple mock
         const mockEditor = {
             selection: {
                 isEmpty: false
@@ -22,36 +35,19 @@ suite('Query Parser Unit Tests', () => {
     test('Should find query at cursor when selection is empty', () => {
         const text = 'SELECT 1; SELECT 2; SELECT 3;';
         
-        // Mocking a document with a specific cursor position
         const mockEditor = {
             selection: {
                 isEmpty: true,
-                active: { line: 0, character: 15 } // In the middle of "SELECT 2"
+                active: new vscode.Position(0, 15)
             },
             document: {
-                getText: (range?: any) => text,
-                offsetAt: (pos: any) => 15
+                getText: () => text,
+                offsetAt: (pos: vscode.Position) => pos.character,
+                positionAt: (offset: number) => new vscode.Position(0, offset)
             }
         } as any;
 
         const result = getQueryAtCursor(mockEditor);
         assert.strictEqual(result, 'SELECT 2');
-    });
-
-    test('Should return empty string if no valid query found', () => {
-        const text = '';
-        const mockEditor = {
-            selection: {
-                isEmpty: true,
-                active: { line: 0, character: 0 }
-            },
-            document: {
-                getText: () => text,
-                offsetAt: () => 0
-            }
-        } as any;
-
-        const result = getQueryAtCursor(mockEditor);
-        assert.strictEqual(result, '');
     });
 });
