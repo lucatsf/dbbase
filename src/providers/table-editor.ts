@@ -35,12 +35,20 @@ export class TableDataEditor {
                 // Usamos aspas dependendo do tipo de banco
                 const quote = connection.type === 'mysql' ? '`' : '"';
                 const offset = (currentPage - 1) * limit;
-                const sql = `SELECT * FROM ${quote}${tableName}${quote} LIMIT ${limit} OFFSET ${offset};`;
+                // Buscamos limit + 1 para saber se existe uma próxima página
+                const sql = `SELECT * FROM ${quote}${tableName}${quote} LIMIT ${limit + 1} OFFSET ${offset};`;
                 const result = await driver.query(sql);
                 await driver.disconnect();
 
-                currentData = result.rows;
-                panel.webview.html = getTableHtml(currentData, { page: currentPage, limit, isEditable: true });
+                const hasMore = result.rows.length > limit;
+                currentData = hasMore ? result.rows.slice(0, limit) : result.rows;
+                
+                panel.webview.html = getTableHtml(currentData, { 
+                    page: currentPage, 
+                    limit, 
+                    isEditable: true,
+                    hasMore: hasMore
+                });
             } catch (err: any) {
                 vscode.window.showErrorMessage(`Erro ao carregar dados: ${err.message}`);
                 panel.dispose();

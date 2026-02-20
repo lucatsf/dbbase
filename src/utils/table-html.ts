@@ -1,8 +1,8 @@
-export function getTableHtml(data: any[], config?: { page: number, total?: number, limit: number, isEditable?: boolean }) {
+export function getTableHtml(data: any[], config?: { page: number, total?: number, limit: number, isEditable?: boolean, hasMore?: boolean }) {
     return getMultipleTablesHtml([{ rows: data, sql: '' }], config);
 }
 
-export function getMultipleTablesHtml(results: { rows: any[], sql: string }[], config?: { page: number, total?: number, limit: number, isEditable?: boolean }) {
+export function getMultipleTablesHtml(results: { rows: any[], sql: string }[], config?: { page: number, total?: number, limit: number, isEditable?: boolean, hasMore?: boolean }) {
     if (!results || results.length === 0 || (results.length === 1 && results[0].rows.length === 0)) {
         return `
             <body style="background:var(--vscode-editor-background);color:var(--vscode-disabledForeground);display:flex;justify-content:center;align-items:center;height:100vh;margin:0;font-family:sans-serif;">
@@ -257,7 +257,7 @@ export function getMultipleTablesHtml(results: { rows: any[], sql: string }[], c
                         <svg viewBox="0 0 16 16" xmlns="http://www.w3.org/2000/svg"><path d="M10 12.7l.7-.7-4-4 4-4-.7-.7-4.7 4.7z"/></svg>
                     </button>
                     <span style="font-size: 11px; opacity: 0.8;">Página ${config.page || 1}</span>
-                    <button id="nextBtn" class="icon-btn" title="Próxima Página" ${results[0].rows.length < (config.limit || 500) ? 'disabled' : ''}>
+                    <button id="nextBtn" class="icon-btn" title="Próxima Página" ${config.hasMore === false ? 'disabled' : ''}>
                         <svg viewBox="0 0 16 16" xmlns="http://www.w3.org/2000/svg"><path d="M6 12.7l-.7-.7 4-4-4-4 .7-.7 4.7 4.7z"/></svg>
                     </button>
                 </div>
