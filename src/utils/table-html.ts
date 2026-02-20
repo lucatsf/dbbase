@@ -149,6 +149,8 @@ export function getMultipleTablesHtml(results: { rows: any[], sql: string }[], c
                 overflow: hidden;
                 text-overflow: ellipsis;
                 cursor: cell;
+                height: 24px;
+                vertical-align: middle;
             }
             td.modified {
                 background: var(--modified-bg) !important;
@@ -171,13 +173,16 @@ export function getMultipleTablesHtml(results: { rows: any[], sql: string }[], c
             }
             input.edit-input {
                 width: 100%;
+                box-sizing: border-box;
                 background: var(--vscode-input-background);
                 color: var(--vscode-input-foreground);
                 border: 1px solid var(--vscode-focusBorder);
-                padding: 2px 4px;
+                padding: 1px 4px;
                 font-family: inherit;
                 font-size: inherit;
                 outline: none;
+                display: block;
+                margin: 0;
             }
 
             .export-dropdown {
@@ -308,6 +313,11 @@ export function getMultipleTablesHtml(results: { rows: any[], sql: string }[], c
                 const colName = td.getAttribute('data-col');
                 const rowData = JSON.parse(td.parentElement.getAttribute('data-row'));
 
+                // Preserve width to avoid flickering
+                const currentWidth = td.getBoundingClientRect().width;
+                td.style.width = currentWidth + 'px';
+                td.style.minWidth = currentWidth + 'px';
+
                 const input = document.createElement('input');
                 input.className = 'edit-input';
                 input.value = originalValue;
@@ -316,11 +326,17 @@ export function getMultipleTablesHtml(results: { rows: any[], sql: string }[], c
                 td.appendChild(input);
                 input.focus();
 
-                input.onblur = () => finishEdit(td, input, originalValue, colName, rowData);
+                input.onblur = () => {
+                    finishEdit(td, input, originalValue, colName, rowData);
+                    td.style.width = '';
+                    td.style.minWidth = '';
+                };
                 input.onkeydown = (ke) => {
                     if (ke.key === 'Enter') input.blur();
                     if (ke.key === 'Escape') {
                         td.innerText = originalValue === '' ? 'NULL' : originalValue;
+                        td.style.width = '';
+                        td.style.minWidth = '';
                     }
                 };
             });
