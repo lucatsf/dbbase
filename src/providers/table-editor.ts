@@ -21,6 +21,8 @@ export class TableDataEditor {
 
         panel.iconPath = new vscode.ThemeIcon('table');
         let currentData: any[] = [];
+        let currentPage = 1;
+        const limit = 500;
 
         const loadData = async () => {
             try {
@@ -32,12 +34,13 @@ export class TableDataEditor {
 
                 // Usamos aspas dependendo do tipo de banco
                 const quote = connection.type === 'mysql' ? '`' : '"';
-                const sql = `SELECT * FROM ${quote}${tableName}${quote} LIMIT 1000;`;
+                const offset = (currentPage - 1) * limit;
+                const sql = `SELECT * FROM ${quote}${tableName}${quote} LIMIT ${limit} OFFSET ${offset};`;
                 const result = await driver.query(sql);
                 await driver.disconnect();
 
                 currentData = result.rows;
-                panel.webview.html = getTableHtml(currentData);
+                panel.webview.html = getTableHtml(currentData, { page: currentPage, limit, isEditable: true });
             } catch (err: any) {
                 vscode.window.showErrorMessage(`Erro ao carregar dados: ${err.message}`);
                 panel.dispose();
@@ -51,8 +54,60 @@ export class TableDataEditor {
                 case 'refresh':
                     await loadData();
                     break;
+                case 'prevPage':
+                    if (currentPage > 1) {
+                        currentPage--;
+                        await loadData();
+                    }
+                    break;
+                case 'nextPage':
+                    currentPage++;
+                    await loadData();
+                    break;
                 case 'exportData':
                     await this.handleExport(message.format, currentData, tableName);
+                    break;
+                case 'addRow':
+                    try {
+                        const driver = DriverFactory.create(connection);
+                        const quote = connection.type === 'mysql' ? '`' : '"';
+                        const columns = Object.keys(message.rowData).filter(k => message.rowData[k] !== null);
+                        const values = columns.map(k => message.rowData[k]);
+                        
+                        let sql = '';
+                        if (connection.type === 'mysql') {
+                            sql = `INSERT INTO ${quote}${tableName}${quote} (${columns.map(c => `${quote}${c}${quote}`).join(', ')}) VALUES (${columns.map(() => '?').join(', ')})`;
+                        } else {
+                            sql = `INSERT INTO ${quote}${tableName}${quote} (${columns.map(c => `${quote}${c}${quote}`).join(', ')}) VALUES (${columns.map((_, i) => `$${i+1}`).join(', ')})`;
+                        }
+                        
+                        await driver.connect();
+                        await driver.query(sql, values);
+                        await driver.disconnect();
+                        vscode.window.setStatusBarMessage(`[DBBASE] Linha inserida com sucesso.`, 3000);
+                        await loadData();
+                    } catch (err: any) {
+                        vscode.window.showErrorMessage(`Erro ao inserir linha: ${err.message}`);
+                    }
+                    break;
+                case 'deleteRow':
+                    try {
+                        const driver = DriverFactory.create(connection);
+                        const pkColumn = Object.keys(message.rowData).find(k => k.toLowerCase() === 'id') || Object.keys(message.rowData)[0];
+                        const pkValue = message.rowData[pkColumn];
+                        const quote = connection.type === 'mysql' ? '`' : '"';
+                        
+                        const p1 = connection.type === 'mysql' ? '?' : '$1';
+                        const deleteQuery = `DELETE FROM ${quote}${tableName}${quote} WHERE ${quote}${pkColumn}${quote} = ${p1}`;
+                        
+                        await driver.connect();
+                        await driver.query(deleteQuery, [pkValue]);
+                        await driver.disconnect();
+                        vscode.window.setStatusBarMessage(`[DBBASE] Linha deletada com sucesso.`, 3000);
+                        await loadData();
+                    } catch (err: any) {
+                        vscode.window.showErrorMessage(`Erro ao deletar: ${err.message}`);
+                    }
                     break;
                 case 'updateCell':
                     try {

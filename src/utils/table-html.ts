@@ -1,8 +1,8 @@
-export function getTableHtml(data: any[]) {
-    return getMultipleTablesHtml([{ rows: data, sql: '' }]);
+export function getTableHtml(data: any[], config?: { page: number, total?: number, limit: number, isEditable?: boolean }) {
+    return getMultipleTablesHtml([{ rows: data, sql: '' }], config);
 }
 
-export function getMultipleTablesHtml(results: { rows: any[], sql: string }[]) {
+export function getMultipleTablesHtml(results: { rows: any[], sql: string }[], config?: { page: number, total?: number, limit: number, isEditable?: boolean }) {
     if (!results || results.length === 0 || (results.length === 1 && results[0].rows.length === 0)) {
         return `
             <body style="background:var(--vscode-editor-background);color:var(--vscode-disabledForeground);display:flex;justify-content:center;align-items:center;height:100vh;margin:0;font-family:sans-serif;">
@@ -157,6 +157,10 @@ export function getMultipleTablesHtml(results: { rows: any[], sql: string }[]) {
             tr:hover td {
                 background: var(--row-hover);
             }
+            tr.selected td {
+                background: var(--vscode-list-activeSelectionBackground) !important;
+                color: var(--vscode-list-activeSelectionForeground) !important;
+            }
             .row-num {
                 width: 30px;
                 text-align: center;
@@ -221,10 +225,22 @@ export function getMultipleTablesHtml(results: { rows: any[], sql: string }[]) {
                     <svg viewBox="0 0 16 16" xmlns="http://www.w3.org/2000/svg"><path d="M7.061 8l-2.78-2.781a.665.665 0 1 1 .94-.94L8 7.061l2.781-2.78a.665.665 0 1 1 .94.94L8.939 8l2.782 2.781a.665.665 0 1 1-.941.94L8 8.939l-2.781 2.782a.665.665 0 1 1-.94-.941L7.061 8z"/></svg>
                 </button>
                 <div style="width: 1px; height: 14px; background: var(--border); margin: 0 6px;"></div>
+                ${config?.isEditable ? `
+                <button id="addRowBtn" class="icon-btn" title="Adicionar Nova Linha">
+                    <svg viewBox="0 0 16 16" xmlns="http://www.w3.org/2000/svg"><path d="M14 7H9V2H7v5H2v2h5v5h2V9h5z"/></svg>
+                </button>
+                <button id="cloneRowBtn" class="icon-btn" title="Clonar Linha Selecionada" disabled>
+                    <svg viewBox="0 0 16 16" xmlns="http://www.w3.org/2000/svg"><path d="M4 4H1v11h11v-3h1V3L10 0H4v4zm1-3h4.6L12 3.4V11H5V1zm6 11H2V5h2v6.6l.4.4H11v1z"/></svg>
+                </button>
+                <button id="deleteRowBtn" class="icon-btn cancel" title="Deletar Linha Selecionada" disabled>
+                    <svg viewBox="0 0 16 16" xmlns="http://www.w3.org/2000/svg"><path d="M6.5 1h3l.5.5V2h3v1h-1v11l-.5.5h-9l-.5-.5V3h-1V2h3v-.5l.5-.5zM11 3H5v10h6V3zM6 4h1v8H6V4zm3 0h1v8H9V4z"/></svg>
+                </button>
+                <div style="width: 1px; height: 14px; background: var(--border); margin: 0 6px;"></div>
+                ` : ''}
                 <div class="export-dropdown">
                     <button id="exportBtn" class="icon-btn" title="Exportar Dados">
                         <svg viewBox="0 0 16 16" xmlns="http://www.w3.org/2000/svg"><path fill-rule="evenodd" clip-rule="evenodd" d="M13.5 1h-11l-.5.5v13l.5.5h11l.5-.5v-13l-.5-.5zm-.5 13h-10V2h10v12zM4.5 9h7v1h-7V9zm7-2h-7v1h7V7zm-7-2h7v1h-7V5z"/></svg>
-                        <span style="font-size: 10px; margin-left: 4px;">Export Last Query</span>
+                        <span style="font-size: 10px; margin-left: 4px;">Export</span>
                     </button>
                     <div id="exportMenu" class="dropdown-content">
                         <a href="#" data-format="csv">CSV</a>
@@ -234,6 +250,18 @@ export function getMultipleTablesHtml(results: { rows: any[], sql: string }[]) {
                         <a href="#" data-format="sql">SQL Inserts</a>
                     </div>
                 </div>
+                <div style="flex-grow: 1;"></div>
+                ${config ? `
+                <div class="pagination" style="display: flex; align-items: center; gap: 8px; margin-right: 8px;">
+                    <button id="prevBtn" class="icon-btn" title="Página Anterior" ${config.page === 1 ? 'disabled' : ''}>
+                        <svg viewBox="0 0 16 16" xmlns="http://www.w3.org/2000/svg"><path d="M10 12.7l.7-.7-4-4 4-4-.7-.7-4.7 4.7z"/></svg>
+                    </button>
+                    <span style="font-size: 11px; opacity: 0.8;">Página ${config.page || 1}</span>
+                    <button id="nextBtn" class="icon-btn" title="Próxima Página" ${results[0].rows.length < (config.limit || 500) ? 'disabled' : ''}>
+                        <svg viewBox="0 0 16 16" xmlns="http://www.w3.org/2000/svg"><path d="M6 12.7l-.7-.7 4-4-4-4 .7-.7 4.7 4.7z"/></svg>
+                    </button>
+                </div>
+                ` : ''}
             </div>
             <div id="main-content" style="padding: 10px;">
                 ${tablesHtml}
@@ -243,9 +271,32 @@ export function getMultipleTablesHtml(results: { rows: any[], sql: string }[]) {
         <script>
             const vscode = acquireVsCodeApi();
             let pendingChanges = [];
+            let currentSelectedRow = null;
             const saveBtn = document.getElementById('saveBtn');
             const cancelBtn = document.getElementById('cancelBtn');
             const refreshBtn = document.getElementById('refreshBtn');
+            const addRowBtn = document.getElementById('addRowBtn');
+            const cloneRowBtn = document.getElementById('cloneRowBtn');
+            const deleteRowBtn = document.getElementById('deleteRowBtn');
+            const prevBtn = document.getElementById('prevBtn');
+            const nextBtn = document.getElementById('nextBtn');
+
+            // Selection Logic
+            document.addEventListener('click', (e) => {
+                const tr = e.target.closest('tr');
+                if (tr && tr.parentElement.tagName === 'TBODY') {
+                    if (currentSelectedRow) currentSelectedRow.classList.remove('selected');
+                    currentSelectedRow = tr;
+                    tr.classList.add('selected');
+                    cloneRowBtn.disabled = false;
+                    deleteRowBtn.disabled = false;
+                } else if (!e.target.closest('.icon-btn')) {
+                    if (currentSelectedRow) currentSelectedRow.classList.remove('selected');
+                    currentSelectedRow = null;
+                    cloneRowBtn.disabled = true;
+                    deleteRowBtn.disabled = true;
+                }
+            });
 
             // Delegated double click for editing
             document.addEventListener('dblclick', (e) => {
@@ -293,18 +344,39 @@ export function getMultipleTablesHtml(results: { rows: any[], sql: string }[]) {
             }
 
             const doSave = () => {
-                if (pendingChanges.length === 0) return;
-                
+                // Handle modified cells in existing rows
                 pendingChanges.forEach(change => {
-                    vscode.postMessage({
-                        command: 'updateCell',
-                        data: {
-                            column: change.column,
-                            value: change.value,
-                            rowData: change.rowData
-                        }
-                    });
+                    if (change.rowData && Object.keys(change.rowData).length > 0) {
+                        vscode.postMessage({
+                            command: 'updateCell',
+                            data: {
+                                column: change.column,
+                                value: change.value,
+                                rowData: change.rowData
+                            }
+                        });
+                    }
                     change.element.classList.remove('modified');
+                });
+
+                // Handle new rows (Add/Clone)
+                document.querySelectorAll('tr').forEach(tr => {
+                    const rowDataAttr = tr.getAttribute('data-row');
+                    if (rowDataAttr === '{}' || tr.classList.contains('modified-row')) {
+                        const newRowData = {};
+                        tr.querySelectorAll('td[data-col]').forEach(td => {
+                            const col = td.getAttribute('data-col');
+                            const val = td.innerText === 'NULL' ? null : td.innerText;
+                            newRowData[col] = val;
+                        });
+
+                        vscode.postMessage({
+                            command: 'addRow',
+                            rowData: newRowData
+                        });
+                        tr.classList.remove('modified-row');
+                        tr.querySelectorAll('.modified').forEach(td => td.classList.remove('modified'));
+                    }
                 });
 
                 pendingChanges = [];
@@ -325,6 +397,58 @@ export function getMultipleTablesHtml(results: { rows: any[], sql: string }[]) {
             saveBtn.onclick = doSave;
             cancelBtn.onclick = doCancel;
             refreshBtn.onclick = () => vscode.postMessage({ command: 'refresh' });
+
+            if (addRowBtn) addRowBtn.onclick = () => {
+                const tbody = document.querySelector('tbody');
+                const firstRow = tbody.querySelector('tr');
+                if (!firstRow) return;
+                
+                const newRow = firstRow.cloneNode(true);
+                newRow.classList.remove('selected');
+                newRow.setAttribute('data-row', '{}');
+                newRow.querySelectorAll('td').forEach((td, i) => {
+                    if (td.classList.contains('row-num')) {
+                        td.innerText = '*';
+                    } else {
+                        td.innerText = 'NULL';
+                        td.classList.add('modified');
+                    }
+                });
+                tbody.prepend(newRow);
+                saveBtn.disabled = false;
+                cancelBtn.disabled = false;
+            };
+
+            if (cloneRowBtn) cloneRowBtn.onclick = () => {
+                if (!currentSelectedRow) return;
+                const newRow = currentSelectedRow.cloneNode(true);
+                newRow.classList.remove('selected');
+                newRow.classList.add('modified-row'); // Mark as new for clonning
+                newRow.querySelectorAll('td').forEach(td => {
+                    if (td.classList.contains('row-num')) {
+                        td.innerText = '*';
+                    } else if (!td.classList.contains('row-num')) {
+                        td.classList.add('modified');
+                    }
+                });
+                currentSelectedRow.after(newRow);
+                saveBtn.disabled = false;
+                cancelBtn.disabled = false;
+            };
+
+            if (deleteRowBtn) deleteRowBtn.onclick = () => {
+                if (!currentSelectedRow) return;
+                const rowData = JSON.parse(currentSelectedRow.getAttribute('data-row'));
+                if (confirm('Deseja realmente deletar esta linha?')) {
+                    vscode.postMessage({
+                        command: 'deleteRow',
+                        rowData: rowData
+                    });
+                }
+            };
+
+            if (prevBtn) prevBtn.onclick = () => vscode.postMessage({ command: 'prevPage' });
+            if (nextBtn) nextBtn.onclick = () => vscode.postMessage({ command: 'nextPage' });
 
             // Export logic - Exports the LAST result set
             document.querySelectorAll('.dropdown-content a').forEach(item => {
