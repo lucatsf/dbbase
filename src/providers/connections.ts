@@ -185,8 +185,8 @@ export class ConnectionsProvider implements vscode.TreeDataProvider<vscode.TreeI
             await driver.connect();
             
             // Usamos SCAN com paginação para não travar
-            // Para simplicidade inicial, pegamos as primeiras 1000 chaves para construir o nível atual
-            const { keys } = await driver.scanKeys('0', prefix + '*', 2000);
+            // Para simplicidade inicial, pegamos as primeiras 500 chaves para construir o nível atual
+            const { keys } = await driver.scanKeys('0', prefix + '*', 500);
             await driver.disconnect();
 
             const folders = new Set<string>();

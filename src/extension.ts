@@ -8,7 +8,7 @@ import { RedisEditorProvider } from './providers/redis-editor';
 import { TableDataEditor } from './providers/table-editor';
 import { DriverFactory } from './database';
 import { Connection } from './types';
-import { getQueryAtCursor } from './utils/query-parser';
+import { getQueryAtCursor, splitSQL } from './utils/query-parser';
 import { QueryManager } from './utils/query-manager';
 
 let activeConnection: Connection | undefined = undefined;
@@ -154,48 +154,60 @@ export function activate(context: vscode.ExtensionContext) {
             return;
         }
 
-        const sql = getQueryAtCursor(editor, activeConnection.type);
-        if (!sql) {
+        const rawSql = getQueryAtCursor(editor, activeConnection.type);
+        if (!rawSql) {
             return;
         }
 
-        // Validação de segurança básica
-        const isDataChangeQuery = /^(INSERT|UPDATE|DELETE|CREATE|DROP|ALTER)/i.test(sql);
-        if (isDataChangeQuery && !sql.endsWith(';')) {
-            vscode.window.showErrorMessage("⚠️ Query de alteração precisa terminar com ';' por segurança.");
-            return;
-        }
+        // Dividir em múltiplas statements se não for Redis
+        const statements = activeConnection.type === 'redis' ? [rawSql] : splitSQL(rawSql);
+        if (statements.length === 0) return;
 
         // Focar no painel de resultados
         vscode.commands.executeCommand(`${ResultsViewProvider.viewType}.focus`);
         
+        const driver = DriverFactory.create(activeConnection);
+        const allResults: { rows: any[], sql: string }[] = [];
+        let totalExecutionTime = 0;
+
         try {
-            const driver = DriverFactory.create(activeConnection);
             await driver.connect();
-            
-            // Garante que o botão de desconectar apareça após uma query bem sucedida
             connectionsProvider.setConnectionStatus(activeConnection.id, 'online');
 
-            const startTime = Date.now();
-            const result = await driver.query(sql);
-            const executionTime = Date.now() - startTime;
+            for (const sql of statements) {
+                const isDataChangeQuery = /^(INSERT|UPDATE|DELETE|CREATE|DROP|ALTER)/i.test(sql);
+                
+                const startTime = Date.now();
+                const result = await driver.query(sql);
+                const executionTime = Date.now() - startTime;
+                totalExecutionTime += executionTime;
 
-            let rows = result.rows;
-            if (isDataChangeQuery && rows.length === 0) {
-                // Feedback visual para comandos sem retorno de linhas
-                rows = [{ 
-                    status: "Success", 
-                    rows_affected: result.rowCount, 
-                    execution_time: `${executionTime}ms` 
-                }];
+                let rows = result.rows;
+                if (isDataChangeQuery && (!rows || rows.length === 0)) {
+                    rows = [{ 
+                        status: "Success", 
+                        rows_affected: result.rowCount || result.affectedRows, 
+                        execution_time: `${executionTime}ms` 
+                    }];
+                }
+                
+                allResults.push({ rows, sql });
             }
 
-            resultsProvider.updateResults(rows, sql, activeConnection);
-            vscode.window.setStatusBarMessage(`[DBBASE] Query executada em ${executionTime}ms`, 5000);
+            // Atualizar a view com todos os resultados agrupados
+            resultsProvider.updateMultipleResults(allResults, activeConnection);
+            vscode.window.setStatusBarMessage(`[DBBASE] ${statements.length} queries executadas em ${totalExecutionTime}ms`, 5000);
             
-            await driver.disconnect();
         } catch (err: any) {
+            // Mesmo com erro, se tivemos resultados anteriores, podemos mostrar? 
+            // Geralmente ferramentas param no primeiro erro.
             vscode.window.showErrorMessage(`Erro na Query: ${err.message}`);
+            
+            if (allResults.length > 0) {
+                resultsProvider.updateMultipleResults(allResults, activeConnection);
+            }
+        } finally {
+            await driver.disconnect();
         }
     }));
 

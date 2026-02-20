@@ -74,7 +74,7 @@ export class RedisDriver extends BaseDriver {
     }
 
     // Métodos específicos para Redis
-    async scanKeys(cursor: string = '0', pattern: string = '*', count: number = 1000): Promise<{ cursor: string, keys: string[] }> {
+    async scanKeys(cursor: string = '0', pattern: string = '*', count: number = 500): Promise<{ cursor: string, keys: string[] }> {
         if (!this.client) { throw new Error('Redis not connected'); }
         const [newCursor, keys] = await this.client.scan(cursor, 'MATCH', pattern, 'COUNT', count);
         return { cursor: newCursor, keys };
@@ -90,10 +90,17 @@ export class RedisDriver extends BaseDriver {
         const type = await this.getKeyType(key);
         switch (type) {
             case 'string': return await this.client.get(key);
-            case 'list': return await this.client.lrange(key, 0, -1);
-            case 'set': return await this.client.smembers(key);
-            case 'zset': return await this.client.zrange(key, 0, -1, 'WITHSCORES');
-            case 'hash': return await this.client.hgetall(key);
+            case 'list': return await this.client.lrange(key, 0, 499);
+            case 'set': return await this.client.sscan(key, '0', 'COUNT', 500).then(res => res[1]);
+            case 'zset': return await this.client.zrange(key, 0, 499, 'WITHSCORES');
+            case 'hash': return await this.client.hscan(key, '0', 'COUNT', 500).then(res => {
+                const [cursor, fields] = res;
+                const obj: { [key: string]: any } = {};
+                for (let i = 0; i < fields.length; i += 2) {
+                    obj[fields[i]] = fields[i+1];
+                }
+                return obj;
+            });
             default: return null;
         }
     }

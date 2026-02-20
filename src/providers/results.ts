@@ -2,7 +2,7 @@ import * as vscode from 'vscode';
 import * as fs from 'fs';
 import * as path from 'path';
 import * as XLSX from 'xlsx';
-import { getTableHtml } from '../utils/table-html';
+import { getTableHtml, getMultipleTablesHtml } from '../utils/table-html';
 import { DriverFactory } from '../database';
 import { DataExporter } from '../utils/exporter';
 
@@ -34,7 +34,7 @@ export class ResultsViewProvider implements vscode.WebviewViewProvider {
                     break;
                 case 'refresh':
                     if (this._lastQuery && this._lastConnection) {
-                        vscode.commands.executeCommand('dbbase.executeQuery');
+                        vscode.commands.executeCommand('dbbase.runQuery');
                     }
                     break;
                 case 'exportData':
@@ -115,6 +115,17 @@ export class ResultsViewProvider implements vscode.WebviewViewProvider {
         if (this._view) {
             this._view.show?.(true);
             this._view.webview.html = getTableHtml(data);
+        }
+    }
+
+    public updateMultipleResults(results: { rows: any[], sql: string }[], connection: any) {
+        this._lastResults = results[results.length - 1].rows; // Mantém compatibilidade com export do último
+        this._lastQuery = results[results.length - 1].sql;
+        this._lastConnection = connection;
+
+        if (this._view) {
+            this._view.show?.(true);
+            this._view.webview.html = getMultipleTablesHtml(results);
         }
     }
 

@@ -23,7 +23,7 @@ export class MySQLDriver extends BaseDriver {
         }
 
         const startTime = Date.now();
-        const [result] = await this.connection.execute(sql, params);
+        const [result] = await this.connection.query(sql, params);
         const executionTime = Date.now() - startTime;
 
         let rows: any[] = [];
