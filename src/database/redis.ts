@@ -95,7 +95,7 @@ export class RedisDriver extends BaseDriver {
             case 'zset': return await this.client.zrange(key, 0, 499, 'WITHSCORES');
             case 'hash': return await this.client.hscan(key, '0', 'COUNT', 500).then(res => {
                 const [cursor, fields] = res;
-                const obj = {};
+                const obj: { [key: string]: any } = {};
                 for (let i = 0; i < fields.length; i += 2) {
                     obj[fields[i]] = fields[i+1];
                 }

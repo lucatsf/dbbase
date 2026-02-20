@@ -50,7 +50,7 @@ export class TableDataEditor {
                     hasMore: hasMore
                 });
             } catch (err: any) {
-                vscode.window.showErrorMessage(`Erro ao carregar dados: ${err.message}`);
+                vscode.window.showErrorMessage(`Error loading data: ${err.message}`);
                 panel.dispose();
             }
         };
@@ -79,27 +79,45 @@ export class TableDataEditor {
                     try {
                         const driver = DriverFactory.create(connection);
                         const quote = connection.type === 'mysql' ? '`' : '"';
-                        const columns = Object.keys(message.rowData).filter(k => message.rowData[k] !== null);
+                        
+                        // Filtrar colunas: remove valores nulos/vazios que podem ser PKs auto-incremento
+                        const columns = Object.keys(message.rowData).filter(k => {
+                            const val = message.rowData[k];
+                            // Se for nulo ou string vazia, e assumirmos que pode ser auto-incremento, ignoramos no INSERT
+                            return val !== null && val !== '';
+                        });
                         const values = columns.map(k => message.rowData[k]);
                         
                         let sql = '';
-                        if (connection.type === 'mysql') {
-                            sql = `INSERT INTO ${quote}${tableName}${quote} (${columns.map(c => `${quote}${c}${quote}`).join(', ')}) VALUES (${columns.map(() => '?').join(', ')})`;
+                        if (columns.length === 0) {
+                            // Caso de INSERT padrão sem colunas (se suportado pelo banco)
+                            sql = connection.type === 'mysql' ? `INSERT INTO ${quote}${tableName}${quote} () VALUES ()` : `INSERT INTO ${quote}${tableName}${quote} DEFAULT VALUES`;
                         } else {
-                            sql = `INSERT INTO ${quote}${tableName}${quote} (${columns.map(c => `${quote}${c}${quote}`).join(', ')}) VALUES (${columns.map((_, i) => `$${i+1}`).join(', ')})`;
+                            if (connection.type === 'mysql') {
+                                sql = `INSERT INTO ${quote}${tableName}${quote} (${columns.map(c => `${quote}${c}${quote}`).join(', ')}) VALUES (${columns.map(() => '?').join(', ')})`;
+                            } else {
+                                sql = `INSERT INTO ${quote}${tableName}${quote} (${columns.map(c => `${quote}${c}${quote}`).join(', ')}) VALUES (${columns.map((_, i) => `$${i+1}`).join(', ')})`;
+                            }
                         }
                         
                         await driver.connect();
                         await driver.query(sql, values);
                         await driver.disconnect();
-                        vscode.window.setStatusBarMessage(`[DBBASE] Linha inserida com sucesso.`, 3000);
+                        vscode.window.setStatusBarMessage(`[DBBASE] Row inserted successfully.`, 3000);
                         await loadData();
                     } catch (err: any) {
-                        vscode.window.showErrorMessage(`Erro ao inserir linha: ${err.message}`);
+                        vscode.window.showErrorMessage(`Error inserting row: ${err.message}`);
                     }
                     break;
                 case 'deleteRow':
                     try {
+                        const confirm = await vscode.window.showWarningMessage(
+                            `Are you sure you want to delete this row from table ${tableName}?`,
+                            { modal: true },
+                            'Delete'
+                        );
+                        if (confirm !== 'Delete') return;
+
                         const driver = DriverFactory.create(connection);
                         const pkColumn = Object.keys(message.rowData).find(k => k.toLowerCase() === 'id') || Object.keys(message.rowData)[0];
                         const pkValue = message.rowData[pkColumn];
@@ -111,10 +129,10 @@ export class TableDataEditor {
                         await driver.connect();
                         await driver.query(deleteQuery, [pkValue]);
                         await driver.disconnect();
-                        vscode.window.setStatusBarMessage(`[DBBASE] Linha deletada com sucesso.`, 3000);
+                        vscode.window.setStatusBarMessage(`[DBBASE] Row deleted successfully.`, 3000);
                         await loadData();
                     } catch (err: any) {
-                        vscode.window.showErrorMessage(`Erro ao deletar: ${err.message}`);
+                        vscode.window.showErrorMessage(`Error deleting row: ${err.message}`);
                     }
                     break;
                 case 'updateCell':
@@ -133,9 +151,9 @@ export class TableDataEditor {
                         await driver.connect();
                         await driver.query(updateQuery, [message.data.value, pkValue]);
                         await driver.disconnect();
-                        vscode.window.setStatusBarMessage(`[DBBASE] Dados atualizados na tabela ${tableName}.`, 3000);
+                        vscode.window.setStatusBarMessage(`[DBBASE] Data updated in table ${tableName}.`, 3000);
                     } catch (err: any) {
-                        vscode.window.showErrorMessage(`Erro ao atualizar: ${err.message}`);
+                        vscode.window.showErrorMessage(`Error updating data: ${err.message}`);
                     }
                     break;
             }
